@@ -455,7 +455,7 @@ async function trailHtml(docId){
   if(!ap?.length) h += `<div class="muted small">Not yet submitted.</div>`;
   rounds.forEach(r=>{
     if(rounds.length>1) h += `<div class="small bold" style="margin-top:6px">Submission #${r}</div>`;
-    h += `<ul class="trail">` + ap.filter(a=>a.round===r).map(a=>`<li><b>Step ${a.step_no}</b> ${esc(a.step_name)} — ${esc(pname(a.approver_id))} ${badge(a.status)} <span class="muted small">${a.acted_at?dt(a.acted_at):""}</span> ${a.remarks?`<span class="small">“${esc(a.remarks)}”</span>`:""}</li>`).join("") + `</ul>`;
+    h += `<ul class="trail">` + ap.filter(a=>a.round===r).map(a=>`<li><b>${a.step_no===0?"Dept Head":"Step "+a.step_no}</b> ${esc(a.step_no===0?"":a.step_name)} — ${esc(pname(a.approver_id))} ${badge(a.status)} <span class="muted small">${a.acted_at?dt(a.acted_at):""}</span> ${a.remarks?`<span class="small">“${esc(a.remarks)}”</span>`:""}</li>`).join("") + `</ul>`;
   });
   h += `</div><div class="card"><h3>History</h3>` + ((act||[]).length ? `<ul class="trail">${act.map(a=>`<li><b>${esc(a.action)}</b><span class="muted">${esc(a.details||"")}</span><span style="flex:1"></span><span class="small muted">${esc(pname(a.actor))} · ${dt(a.at)}</span></li>`).join("")}</ul>` : `<div class="muted small">—</div>`) + `</div>`;
   return {html:h, approvals:ap||[]};
@@ -557,7 +557,7 @@ async function viewPR(id){
     <div class="card"><div class="grid">
       <div class="fld"><label>Module</label><input value="${esc(pr.purchase_type)} Purchasing" disabled></div>
       <div class="fld"><label>Company</label><select id="pCo" ${editable&&!pr.id?"":"disabled"}>${myCompanies().concat(pr.id&&!myCompanies().some(c=>c.id===pr.company_id)?[comp(pr.company_id)]:[]).map(c=>`<option value="${c.id}" ${c.id===pr.company_id?"selected":""}>${esc(c.code)} — ${esc(c.name)}</option>`).join("")}</select></div>
-      <div class="fld"><label>Department</label><select id="pDept" ${editable?"":"disabled"}><option value="">—</option>${deptOpts(pr.company_id)}</select></div>
+      <div class="fld"><label>Department *</label><select id="pDept" ${editable?"":"disabled"}><option value="">— select —</option>${deptOpts(pr.company_id)}</select><span class="small muted" id="pHead"></span></div>
       <div class="fld"><label>Date needed</label><input type="date" id="pNeed" value="${esc(pr.date_needed||"")}" ${editable?"":"disabled"}></div>
       <div class="fld"><label>Priority</label><select id="pPri" ${editable?"":"disabled"}>${["Normal","Urgent","Critical"].map(p=>`<option ${p===pr.priority?"selected":""}>${p}</option>`).join("")}</select></div>
     </div>
@@ -614,7 +614,10 @@ async function viewPR(id){
     tbody.addEventListener("click", e=>{ if(e.target.classList.contains("li-del")){ L.splice(+e.target.closest("tr").dataset.i,1); draw(); }});
     $("#bAddLine").onclick = ()=>{ L.push({item_id:null,description:"",uom:"",qty:"",est_unit_cost:"",cost_center:L.length?L[L.length-1].cost_center||"":"",remarks:""}); draw(); $$(".li-item").pop()?.focus(); };
     $("#bReqItem").onclick = ()=>masterRequestForm("item","create",null,pr.purchase_type);
-    $("#pCo").onchange = ()=>{ const old=comp(pr.company_id).address||""; if(!$("#pDeliv").value.trim() || $("#pDeliv").value.trim()===old) $("#pDeliv").value = comp($("#pCo").value).address||""; pr.company_id=$("#pCo").value; $("#pDept").innerHTML=`<option value="">—</option>`+deptOpts(pr.company_id); };
+    const headHint = ()=>{ const d=S.depts.find(x=>x.id===$("#pDept").value); const h=d?.head_id&&S.profiles[d.head_id];
+      $("#pHead").innerHTML = !d ? "" : h ? (d.head_id===S.user.id&&pr.requested_by===S.user.id ? "You are the Department Head — this step is skipped." : `First approver: <b>${esc(h.full_name||h.email)}</b> (Department Head)`) : '<span style="color:var(--red)">This department has no Department Head yet.</span>'; };
+    $("#pDept").onchange = headHint; headHint();
+    $("#pCo").onchange = ()=>{ const old=comp(pr.company_id).address||""; if(!$("#pDeliv").value.trim() || $("#pDeliv").value.trim()===old) $("#pDeliv").value = comp($("#pCo").value).address||""; pr.company_id=$("#pCo").value; $("#pDept").innerHTML=`<option value="">— select —</option>`+deptOpts(pr.company_id); headHint(); };
     const save = async ()=>{
       const t=pr.purchase_type;
       const bad = L.find(l=>!l.item_id); if(bad) throw new Error("Every line must use an item from the Item Master.");
@@ -631,6 +634,7 @@ async function viewPR(id){
     $("#bSave").onclick = async ()=>{ const pid = await run(save,"Saved."); if(pid && !pr.id) go("pr-edit/"+pid); else route(); };
     $("#bSubmit").onclick = async ()=>{
       if(!L.length) return toast("Add at least one item.","err");
+      if(!$("#pDept").value) return toast("Select the Department — the PR goes to the Department Head first.","err");
       const pid = await run(save); if(!pid) return;
       try{ await rpc("pur_submit",{p_doc_type:"PR",p_id:pid}); toast("Submitted for approval.","ok"); }
       catch(e){ toast(errMsg(e),"err"); }
@@ -674,7 +678,7 @@ async function viewApprovals(){
     ${ready.length?`<div class="tbl-wrap"><table class="t"><thead><tr><th>Doc</th><th>Doc No.</th><th>Purchase</th><th>Company</th><th>Details</th><th>Step</th><th class="num">Amount</th><th>Submitted</th><th></th></tr></thead><tbody>
       ${ready.map(a=>{ const d=docs[a.doc_id]||{}; const isPR=a.doc_type==="PR";
         return `<tr><td><span class="badge ${isPR?"b-pending":"b-sent"}">${a.doc_type}</span></td><td class="bold"><a href="#${isPR?"pr-edit":"po-edit"}/${a.doc_id}">${esc(isPR?d.pr_no:d.po_no)}</a></td><td>${ptype(d.purchase_type)}</td><td>${esc(d.company?.code||"")}</td>
-        <td>${isPR?`${esc(pname(d.requested_by))} — ${esc((d.purpose||"").slice(0,60))}`:esc(d.supplier?.name||"")}</td><td>${a.step_no} ${esc(a.step_name)}</td><td class="num">${money(d.total)}</td><td>${dt(d.submitted_at)}</td>
+        <td>${isPR?`${esc(pname(d.requested_by))} — ${esc((d.purpose||"").slice(0,60))}`:esc(d.supplier?.name||"")}</td><td>${a.step_no===0?"":a.step_no+" "}${esc(a.step_name)}</td><td class="num">${money(d.total)}</td><td>${dt(d.submitted_at)}</td>
         <td class="row"><button class="btn sm ok" data-a="${a.id}" data-d="approve">Approve</button><button class="btn sm warn" data-a="${a.id}" data-d="reject">Reject</button></td></tr>`;}).join("")}
       </tbody></table></div>`:`<div class="empty">Nothing waiting for you. 🎉</div>`}</div>
     ${waiting.length?`<div class="card"><h3>Coming to you after earlier steps (${waiting.length})</h3><div class="small muted">${waiting.map(a=>`${a.doc_type} — step ${a.step_no}`).join(" · ")}</div></div>`:""}
@@ -1224,7 +1228,7 @@ async function viewSetup(tab){
 async function setupMatrix(){
   const rules = chk(await sb.from("pur_approval_rules").select("*").order("doc_type").order("step_no").order("purchase_type").order("min_amount"));
   const active = Object.values(S.profiles).filter(p=>p.active);
-  $("#setupBody").innerHTML = `<div class="note info">Each company has its own approvers for <b>PR</b> and <b>PO</b>. A step can apply to <b>All</b> purchases or only to <b>Trade</b> / <b>Non-Trade</b>, and applies when the document amount is <b>at or above</b> its minimum amount; steps run in order (1 → 2 → 3). Put two people on the same step if either one may approve.</div>
+  $("#setupBody").innerHTML = `<div class="note info">PRs are first approved automatically by the requester's <b>Department Head</b> (set in Setup → Departments), then by the steps below. Each company has its own approvers for <b>PR</b> and <b>PO</b>. A step can apply to <b>All</b> purchases or only to <b>Trade</b> / <b>Non-Trade</b>, and applies when the document amount is <b>at or above</b> its minimum amount; steps run in order (1 → 2 → 3). Put two people on the same step if either one may approve.</div>
     ${S.companies.filter(c=>c.active).map(c=>`<div class="card"><div class="toolbar"><h3 style="margin:0">${esc(c.code)} — ${esc(c.name)}</h3><div class="sp"></div><button class="btn sm" data-copy="${c.id}">Copy matrix to…</button></div>
       <div style="display:grid;gap:16px">${["PR","PO"].map(dt_=>{ const rs=rules.filter(r=>r.company_id===c.id&&r.doc_type===dt_);
         return `<div><div class="bold" style="margin-bottom:6px">${dt_==="PR"?"Purchase Requisition":"Purchase Order"}</div>
@@ -1409,10 +1413,21 @@ async function setupCompanies(){
   $("#cNew").onclick=()=>form(null);
 }
 async function setupDepts(){
-  $("#setupBody").innerHTML = S.companies.filter(c=>c.active).map(c=>`<div class="card"><h3>${esc(c.code)} — ${esc(c.name)}</h3><div class="row">
-    ${S.depts.filter(d=>d.company_id===c.id).map(d=>`<span class="badge ${d.active?"b-active":"b-inactive"}" style="font-size:12.5px;padding:4px 10px">${esc(d.name)} <a href="javascript:void 0" data-td="${d.id}" title="${d.active?"Deactivate":"Activate"}" style="color:inherit;margin-left:4px">${d.active?"✕":"↺"}</a></span>`).join("")}
-    <input class="inp" style="width:180px" placeholder="New department" data-nd="${c.id}"><button class="btn sm" data-ad="${c.id}">Add</button></div></div>`).join("");
-  $$("[data-ad]").forEach(b=>b.onclick=async()=>{ const i=$(`[data-nd="${b.dataset.ad}"]`); const n=i.value.trim(); if(!n) return; await run(async()=>chk(await sb.from("pur_departments").insert({company_id:b.dataset.ad,name:n})),"Added."); await loadRefs(); setupDepts(); });
+  const users = Object.values(S.profiles).filter(p=>p.active && p.role!=="executive").sort((a,b)=>(a.full_name||a.email).localeCompare(b.full_name||b.email));
+  const opts = sel => `<option value="">— no head assigned —</option>`+users.map(u=>`<option value="${u.user_id}" ${u.user_id===sel?"selected":""}>${esc(u.full_name||u.email)}</option>`).join("");
+  $("#setupBody").innerHTML = `<div class="note info">Every PR is first approved by the <b>Department Head</b> of the requester's department, then by the Approval Matrix. If the requester is the Department Head, that step is skipped. A PR cannot be submitted while its department has no head.</div>
+    ${S.companies.filter(c=>c.active).map(c=>{ const ds=S.depts.filter(d=>d.company_id===c.id).sort((a,b)=>a.name.localeCompare(b.name));
+      return `<div class="card"><h3>${esc(c.code)} — ${esc(c.name)}</h3>
+      <div class="tbl-wrap"><table class="t"><thead><tr><th>Department</th><th>Department Head (PR approver)</th><th>Status</th><th></th></tr></thead><tbody>
+      ${ds.map(d=>`<tr style="${d.active?"":"opacity:.55"}"><td class="bold">${esc(d.name)}</td>
+        <td><select class="inp" data-head="${d.id}" style="max-width:320px">${opts(d.head_id)}</select> ${d.active&&!d.head_id?'<span class="badge b-pending" style="text-transform:none">needs a head</span>':""}</td>
+        <td>${badge(d.active?"active":"inactive")}</td>
+        <td><button class="btn sm ${d.active?"warn":""}" data-td="${d.id}">${d.active?"Deactivate":"Activate"}</button></td></tr>`).join("")}
+      <tr><td><input class="inp" placeholder="New department" data-nd="${c.id}"></td><td><select class="inp" data-nh="${c.id}" style="max-width:320px">${opts("")}</select></td><td></td><td><button class="btn sm pri" data-ad="${c.id}">Add</button></td></tr>
+      </tbody></table></div></div>`; }).join("")}`;
+  $$("[data-head]").forEach(sel=>sel.onchange=async()=>{ await run(async()=>chk(await sb.from("pur_departments").update({head_id:sel.value||null}).eq("id",sel.dataset.head)),"Department Head saved."); await loadRefs(); setupDepts(); });
+  $$("[data-ad]").forEach(b=>b.onclick=async()=>{ const c=b.dataset.ad; const n=$(`[data-nd="${c}"]`).value.trim(); if(!n) return toast("Enter the department name.","err");
+    await run(async()=>chk(await sb.from("pur_departments").insert({company_id:c,name:n,head_id:$(`[data-nh="${c}"]`).value||null})),"Department added."); await loadRefs(); setupDepts(); });
   $$("[data-td]").forEach(a=>a.onclick=async()=>{ const d=S.depts.find(x=>x.id===a.dataset.td); await run(async()=>chk(await sb.from("pur_departments").update({active:!d.active}).eq("id",d.id))); await loadRefs(); setupDepts(); });
 }
 

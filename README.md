@@ -14,7 +14,7 @@ Trade (goods for resale / production) and Non-Trade (supplies, services, assets)
 
 ## Workflow
 1. **Purchase Requisition (PR)** — requester picks items from the Item Master, submits.
-2. **Approval** — routed by the per-company **Approval Matrix** (PR and PO separately). A step applies when the amount is ≥ its minimum; steps run in order; several approvers on one step = any one may approve. Rejected documents go back to the preparer for editing and resubmission.
+2. **Approval** — first the requester's **Department Head** (set per department in Setup → Departments; skipped when the requester is the head), then the per-company **Approval Matrix** (PR and PO separately). A step applies when the amount is ≥ its minimum; steps run in order; several approvers on one step = any one may approve. Rejected documents go back to the preparer for editing and resubmission.
 3. **Canvass / RFQ** — Purchasing enters supplier quotes per line, awards one supplier per line → one draft PO per winning supplier. (Or **Direct PO** from an approved PR.)
 4. **Purchase Order** — adjust price/qty, VAT (exclusive / inclusive / non-VAT, 12%), submit for approval, print, mark as sent.
 5. **Receiving** — receiver records deliveries against the PO (partial deliveries allowed). PO becomes *partial* / *received*; the PR closes when all its POs are received.
