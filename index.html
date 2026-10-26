@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<title>All Company Centralized Purchasing System</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23c8102e'/><text x='16' y='22' font-size='16' text-anchor='middle' fill='white' font-family='Arial' font-weight='bold'>P</text></svg>">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --red:#c8102e; --red-d:#9e0c24; --red-l:#fde8eb; --ink:#1f2328; --muted:#6b7280; --line:#e5e7eb;
+  --bg:#f4f5f7; --card:#fff; --green:#15803d; --green-l:#dcfce7; --amber:#b45309; --amber-l:#fef3c7;
+  --blue:#1d4ed8; --blue-l:#dbeafe; --gray-l:#f3f4f6; --violet:#6d28d9; --violet-l:#ede9fe;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+button,input,select,textarea{font:inherit}
+.hide{display:none!important}
+/* ---- login ---- */
+#login{min-height:100%;display:flex;align-items:center;justify-content:center;padding:16px;background:linear-gradient(135deg,var(--red) 0%,var(--red-d) 100%)}
+.login-card{background:#fff;border-radius:14px;padding:32px 28px;width:100%;max-width:380px;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.login-card h1{margin:0 0 4px;font-size:20px;color:var(--red)}
+.login-card p{margin:0 0 22px;color:var(--muted);font-size:13px}
+/* ---- layout ---- */
+#app{display:flex;min-height:100%}
+.side{width:232px;background:#1b1d22;color:#d1d5db;flex-shrink:0;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow:auto}
+.brand{padding:16px 16px 14px;border-bottom:1px solid #2c2f36}
+.brand b{display:block;color:#fff;font-size:15px;letter-spacing:.3px}
+.brand span{font-size:11px;color:#9ca3af;letter-spacing:.4px;text-transform:uppercase}
+.nav{padding:8px 0;flex:1}
+.nav .grp{font-size:10.5px;text-transform:uppercase;letter-spacing:.8px;color:#6b7280;padding:14px 18px 6px}
+.nav a{display:flex;align-items:center;gap:10px;padding:9px 18px;color:#d1d5db;text-decoration:none;font-size:13.5px;border-left:3px solid transparent}
+.nav a:hover{background:#25282f;color:#fff}
+.nav a.on{background:#2a1418;color:#fff;border-left-color:var(--red)}
+.nav a .cnt{margin-left:auto;background:var(--red);color:#fff;border-radius:10px;font-size:11px;padding:1px 7px;font-weight:700}
+.who{padding:12px 16px;border-top:1px solid #2c2f36;font-size:12px}
+.who b{color:#fff;display:block;font-size:13px}
+.who .role{display:inline-block;margin-top:3px;background:#2c2f36;border-radius:4px;padding:1px 6px;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+.who a{color:#fca5a5;cursor:pointer;text-decoration:none;margin-right:10px}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{background:#fff;border-bottom:1px solid var(--line);padding:12px 22px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:5}
+.topbar h2{margin:0;font-size:18px}
+.topbar .sp{flex:1}
+.menu-btn{display:none;background:none;border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer}
+.content{padding:20px 22px 40px}
+/* ---- ui ---- */
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+.card h3{margin:0 0 12px;font-size:15px}
+.btn{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:7px;padding:8px 14px;cursor:pointer;font-weight:600;font-size:13px;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--gray-l)}
+.btn:disabled{opacity:.5;cursor:default}
+.btn.pri{background:var(--red);border-color:var(--red);color:#fff}.btn.pri:hover{background:var(--red-d)}
+.btn.ok{background:var(--green);border-color:var(--green);color:#fff}
+.btn.warn{background:#fff;border-color:#fca5a5;color:var(--red)}
+.btn.sm{padding:5px 9px;font-size:12px}
+.btn.link{border:none;background:none;color:var(--blue);padding:2px 4px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.fld{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fld label{font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.fld input,.fld select,.fld textarea,.inp{border:1px solid #d1d5db;border-radius:7px;padding:8px 10px;background:#fff;width:100%;min-width:0}
+.fld textarea{resize:vertical;min-height:60px}
+.inp:focus,.fld input:focus,.fld select:focus,.fld textarea:focus{outline:2px solid #fecaca;border-color:var(--red)}
+.inp[readonly],.fld input[readonly],.fld input:disabled,.fld select:disabled,.fld textarea:disabled{background:var(--gray-l)}
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:#fff}
+table.t{width:100%;border-collapse:collapse;font-size:13px}
+table.t th{background:#fafafa;text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);white-space:nowrap}
+table.t td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+table.t tr:last-child td{border-bottom:none}
+table.t tr.click{cursor:pointer}table.t tr.click:hover td{background:#fff7f8}
+table.t td.num,table.t th.num{text-align:right;white-space:nowrap}
+table.t input.inp,table.t select.inp{padding:6px 8px}
+table.t tfoot td{font-weight:700;background:#fafafa}
+table.t td.bold{white-space:nowrap}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11.5px;font-weight:700;text-transform:capitalize;white-space:nowrap}
+.b-draft{background:var(--gray-l);color:#374151}.b-pending{background:var(--amber-l);color:var(--amber)}
+.b-approved,.b-awarded,.b-received,.b-closed,.b-active{background:var(--green-l);color:var(--green)}
+.b-rejected,.b-cancelled,.b-inactive{background:var(--red-l);color:var(--red)}
+.b-canvassing,.b-sent,.b-partial{background:var(--blue-l);color:var(--blue)}
+.b-ordered{background:var(--violet-l);color:var(--violet)}.b-skipped{background:var(--gray-l);color:var(--muted)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px 16px;cursor:pointer}
+.kpi:hover{border-color:#fca5a5}
+.kpi .n{font-size:26px;font-weight:800;color:var(--red)}
+.kpi .l{font-size:12px;color:var(--muted);font-weight:600}
+.muted{color:var(--muted)}.small{font-size:12px}.right{text-align:right}.bold{font-weight:700}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.toolbar .sp{flex:1}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.filters .inp{width:auto;min-width:150px}
+.doc-head{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px}
+.doc-head h3{margin:0;font-size:18px}
+.doc-head .sp{flex:1}
+.trail{list-style:none;margin:0;padding:0}
+.trail li{display:flex;gap:10px;padding:8px 0;border-bottom:1px dashed var(--line);font-size:13px;align-items:center;flex-wrap:wrap}
+.trail li:last-child{border-bottom:none}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+.note{background:var(--amber-l);border:1px solid #fde68a;color:#78350f;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:12px}
+.note.info{background:var(--blue-l);border-color:#bfdbfe;color:#1e3a8a}
+.diff td:first-child{color:var(--muted);width:140px}
+.diff .chg{background:#fff7ed;font-weight:700}
+/* modal */
+.modal-bg{position:fixed;inset:0;background:rgba(17,24,39,.5);display:flex;align-items:flex-start;justify-content:center;z-index:50;padding:40px 16px;overflow:auto}
+.modal{background:#fff;border-radius:12px;width:100%;max-width:560px;box-shadow:0 25px 60px rgba(0,0,0,.3)}
+.modal.wide{max-width:900px}
+.modal header{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center}
+.modal header h3{margin:0;font-size:16px;flex:1}
+.modal .body{padding:18px}
+.modal footer{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.x{background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1}
+#toast{position:fixed;bottom:20px;right:20px;z-index:80;display:flex;flex-direction:column;gap:8px}
+.toast{background:#111827;color:#fff;padding:10px 14px;border-radius:8px;box-shadow:0 8px 20px rgba(0,0,0,.25);font-size:13px;max-width:380px}
+.toast.err{background:var(--red)}.toast.ok{background:var(--green)}
+.cv-grid td,.cv-grid th{text-align:center}
+.cv-grid td:first-child,.cv-grid th:first-child{text-align:left}
+.cv-grid .low{background:#f0fdf4}
+.chk{display:flex;align-items:center;gap:6px;font-size:13px}
+@media (max-width:860px){
+  .side{position:fixed;left:-240px;z-index:40;transition:left .2s}
+  .side.open{left:0}
+  .menu-btn{display:inline-block}
+  .content{padding:16px}
+  .topbar{padding:10px 16px}
+}
+@media print{.side,.topbar{display:none}}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login" class="hide">
+  <form class="login-card" id="loginForm">
+    <h1>Centralized Purchasing</h1>
+    <p>All Company Purchasing System — Meatplus Group</p>
+    <div class="fld" style="margin-bottom:12px"><label>Email</label><input id="lgEmail" type="email" autocomplete="username" required></div>
+    <div class="fld" style="margin-bottom:16px"><label>Password</label><input id="lgPass" type="password" autocomplete="current-password" required></div>
+    <button class="btn pri" style="width:100%;justify-content:center;padding:10px" id="lgBtn">Sign in</button>
+    <div id="lgErr" class="small" style="color:var(--red);margin-top:10px"></div>
+  </form>
+</div>
+
+<!-- APP -->
+<div id="app" class="hide">
+  <aside class="side" id="side">
+    <div class="brand"><b>CENTRALIZED PURCHASING</b><span>All Company · Meatplus Group</span></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="who" id="who"></div>
+  </aside>
+  <div class="main">
+    <div class="topbar"><button class="menu-btn" onclick="document.getElementById('side').classList.toggle('open')">☰</button><h2 id="pageTitle">Dashboard</h2><div class="sp"></div><span id="topActions"></span></div>
+    <div class="content" id="view"></div>
+  </div>
+</div>
+<div id="modalRoot"></div>
+<div id="toast"></div>
+
+<script>
+// =====================================================================
+// CONFIG
+// =====================================================================
+const SUPABASE_URL = "https://emkcwukiqxnvcbhkjiqz.supabase.co";
+const SUPABASE_KEY = "sb_publishable_u_qnmEI8oHI9Z_A0-Hht3Q_Yvaa7Ork";
+const FN_ADMIN = SUPABASE_URL + "/functions/v1/pur-admin";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const ROLE_LABEL = {admin:"Module Admin", purchasing:"Purchasing", requester:"Requester", receiver:"Receiver", viewer:"Viewer"};
+const S = { user:null, me:null, companies:[], myCompanyIds:[], depts:[], profiles:{}, items:[], suppliers:[], counts:{} };
+
+// =====================================================================
+// UTIL
+// =====================================================================
+const $ = (s, el=document) => el.querySelector(s);
+const $$ = (s, el=document) => [...el.querySelectorAll(s)];
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money = v => Number(v||0).toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2});
+const qtyf = v => Number(v||0).toLocaleString("en-PH",{maximumFractionDigits:3});
+const num = v => { const n = parseFloat(String(v??"").replace(/,/g,"")); return isNaN(n) ? 0 : n; };
+const d8 = v => v ? new Date(v).toLocaleDateString("en-PH",{year:"numeric",month:"short",day:"2-digit"}) : "";
+const dt = v => v ? new Date(v).toLocaleString("en-PH",{year:"numeric",month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit"}) : "";
+const today = () => new Date(Date.now()+8*3600e3).toISOString().slice(0,10);
+const badge = s => `<span class="badge b-${esc(s)}">${esc(s)}</span>`;
+const isAdmin = () => S.me?.role === "admin";
+const isPurch = () => ["admin","purchasing"].includes(S.me?.role);
+const canRequest = () => ["admin","purchasing","requester"].includes(S.me?.role);
+const canReceive = () => ["admin","purchasing","receiver"].includes(S.me?.role);
+const pname = id => S.profiles[id]?.full_name || S.profiles[id]?.email || "—";
+const comp = id => S.companies.find(c => c.id === id) || {};
+const myCompanies = () => isPurch() ? S.companies.filter(c=>c.active) : S.companies.filter(c => S.myCompanyIds.includes(c.id) && c.active);
+
+function toast(msg, type=""){ const t=document.createElement("div"); t.className="toast "+type; t.textContent=msg; $("#toast").appendChild(t); setTimeout(()=>t.remove(), type==="err"?6500:3500); }
+function errMsg(e){ return (e && (e.message || e.error_description || e.error)) || String(e); }
+async function run(fn, okMsg){ try{ const r = await fn(); if(okMsg) toast(okMsg,"ok"); return r; } catch(e){ console.error(e); toast(errMsg(e),"err"); throw e; } }
+function chk({data, error}){ if(error) throw error; return data; }
+async function rpc(name, args){ return chk(await sb.rpc(name, args)); }
+
+function modal({title, body, foot="", wide=false, onOpen}){
+  const root = $("#modalRoot");
+  const bg = document.createElement("div"); bg.className="modal-bg";
+  bg.innerHTML = `<div class="modal ${wide?"wide":""}"><header><h3>${esc(title)}</h3><button class="x" data-close>&times;</button></header><div class="body">${body}</div>${foot?`<footer>${foot}</footer>`:""}</div>`;
+  root.appendChild(bg);
+  const close = () => bg.remove();
+  bg.addEventListener("click", e => { if(e.target===bg || e.target.closest("[data-close]")) close(); });
+  if(onOpen) onOpen(bg, close);
+  return {el:bg, close};
+}
+function ask(title, label, {required=true, placeholder=""}={}){
+  return new Promise(res => {
+    const m = modal({title, body:`<div class="fld"><label>${esc(label)}</label><textarea id="askT" placeholder="${esc(placeholder)}"></textarea></div>`,
+      foot:`<button class="btn" data-close>Cancel</button><button class="btn pri" id="askOk">OK</button>`,
+      onOpen:(el,close)=>{ $("#askOk",el).onclick=()=>{ const v=$("#askT",el).value.trim(); if(required&&!v){toast("This is required.","err");return;} close(); res(v); }; $("#askT",el).focus(); el.addEventListener("click",e=>{ if(e.target.closest("[data-close]")) res(null); }); }});
+  });
+}
+function confirmBox(title, text){
+  return new Promise(res => { modal({title, body:`<p style="margin:0">${text}</p>`, foot:`<button class="btn" data-close id="cfNo">Cancel</button><button class="btn pri" id="cfYes">Confirm</button>`,
+    onOpen:(el,close)=>{ $("#cfYes",el).onclick=()=>{close();res(true);}; $("#cfNo",el).onclick=()=>res(false); }}); });
+}
+function exportXlsx(rows, name){
+  const ws = XLSX.utils.json_to_sheet(rows); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Data");
+  XLSX.writeFile(wb, name + "_" + today() + ".xlsx");
+}
+async function fetchAll(q){ // paginate past 1000-row cap
+  let out=[], from=0; const size=1000;
+  while(true){ const {data,error} = await q().range(from, from+size-1); if(error) throw error; out=out.concat(data); if(data.length<size) break; from+=size; }
+  return out;
+}
+
+// =====================================================================
+// AUTH
+// =====================================================================
+$("#loginForm").onsubmit = async e => {
+  e.preventDefault(); $("#lgErr").textContent=""; $("#lgBtn").disabled=true;
+  const {error} = await sb.auth.signInWithPassword({email:$("#lgEmail").value.trim(), password:$("#lgPass").value});
+  $("#lgBtn").disabled=false;
+  if(error){ $("#lgErr").textContent = error.message; return; }
+  boot();
+};
+async function logout(){ await sb.auth.signOut(); location.hash=""; location.reload(); }
+
+async function boot(){
+  const {data:{user}} = await sb.auth.getUser();
+  if(!user){ $("#login").classList.remove("hide"); $("#app").classList.add("hide"); return; }
+  S.user = user;
+  const {data:me} = await sb.from("pur_profiles").select("*").eq("user_id", user.id).maybeSingle();
+  if(!me || !me.active){
+    $("#login").classList.remove("hide");
+    $("#lgErr").innerHTML = "Your account has no access to the Purchasing System yet. Please ask the Module Admin to add you.";
+    await sb.auth.signOut(); return;
+  }
+  S.me = me;
+  $("#login").classList.add("hide"); $("#app").classList.remove("hide");
+  await loadRefs();
+  renderWho();
+  if(user.user_metadata?.pur_must_change) changePassword(true);
+  window.addEventListener("hashchange", route);
+  route();
+}
+async function loadRefs(){
+  const [c, uc, d, p, it, su] = await Promise.all([
+    sb.from("pur_companies").select("*").order("code"),
+    sb.from("pur_user_companies").select("company_id").eq("user_id", S.user.id),
+    sb.from("pur_departments").select("*").order("name"),
+    sb.from("pur_profiles").select("user_id,email,full_name,position,role,active"),
+    fetchAll(()=>sb.from("pur_items").select("*").order("code")),
+    fetchAll(()=>sb.from("pur_suppliers").select("*").order("name")),
+  ]);
+  S.companies = chk(c); S.myCompanyIds = chk(uc).map(r=>r.company_id); S.depts = chk(d);
+  S.profiles = Object.fromEntries(chk(p).map(r=>[r.user_id, r]));
+  S.items = it; S.suppliers = su;
+}
+async function refreshMasters(){
+  S.items = await fetchAll(()=>sb.from("pur_items").select("*").order("code"));
+  S.suppliers = await fetchAll(()=>sb.from("pur_suppliers").select("*").order("name"));
+}
+function renderWho(){
+  $("#who").innerHTML = `<b>${esc(S.me.full_name||S.me.email)}</b><span class="small">${esc(S.me.email)}</span><br><span class="role">${esc(ROLE_LABEL[S.me.role])}</span>
+    <div style="margin-top:8px"><a onclick="changePassword()">Change password</a><a onclick="logout()">Sign out</a></div>`;
+}
+function changePassword(forced=false){
+  modal({title: forced ? "Please set a new password" : "Change password",
+    body:`${forced?'<div class="note">Your password was set by the Module Admin. Choose your own password to continue. <b>Note:</b> this login is shared with the other Meatplus apps.</div>':'<div class="note info">This login is shared with the other Meatplus apps, so the new password applies there too.</div>'}
+      <div class="fld" style="margin-bottom:10px"><label>New password</label><input type="password" id="np1"></div>
+      <div class="fld"><label>Confirm password</label><input type="password" id="np2"></div>`,
+    foot:`${forced?"":'<button class="btn" data-close>Cancel</button>'}<button class="btn pri" id="npOk">Save password</button>`,
+    onOpen:(el,close)=>{
+      if(forced) $(".x",el).remove();
+      $("#npOk",el).onclick = async ()=>{
+        const a=$("#np1",el).value, b=$("#np2",el).value;
+        if(a.length<8) return toast("At least 8 characters.","err");
+        if(a!==b) return toast("Passwords do not match.","err");
+        await run(async()=>chk(await sb.auth.updateUser({password:a, data:{pur_must_change:false}})), "Password updated.");
+        close();
+      };
+    }});
+}
+
+// =====================================================================
+// NAV / ROUTER
+// =====================================================================
+const ROUTES = {
+  dashboard:{t:"Dashboard", f:viewDashboard},
+  pr:{t:"Purchase Requisitions", f:viewPRList}, "pr-edit":{t:"Purchase Requisition", f:viewPR},
+  approvals:{t:"My Approvals", f:viewApprovals},
+  canvass:{t:"Canvass / RFQ", f:viewCVList}, "cv-edit":{t:"Canvass / RFQ", f:viewCV},
+  po:{t:"Purchase Orders", f:viewPOList}, "po-edit":{t:"Purchase Order", f:viewPO},
+  rr:{t:"Receiving", f:viewRRList}, "rr-view":{t:"Receiving Report", f:viewRR},
+  items:{t:"Item Master", f:()=>viewMaster("item")}, suppliers:{t:"Supplier Master", f:()=>viewMaster("supplier")},
+  mreq:{t:"Master Data Requests", f:viewMasterRequests},
+  setup:{t:"Setup", f:viewSetup},
+};
+async function navCounts(){
+  const me = S.user.id;
+  const [ap, mr] = await Promise.all([
+    sb.from("pur_approvals").select("id",{count:"exact",head:true}).eq("approver_id",me).eq("status","pending"),
+    isAdmin() ? sb.from("pur_master_requests").select("id",{count:"exact",head:true}).eq("status","pending") : Promise.resolve({count:0}),
+  ]);
+  S.counts = {ap: ap.count||0, mr: mr.count||0};
+}
+function renderNav(cur){
+  const key = {"pr-edit":"pr","cv-edit":"canvass","po-edit":"po","rr-view":"rr"}[cur] || cur;
+  const a = (r, label, ico, cnt) => `<a href="#${r}" class="${key===r?"on":""}"><span>${ico}</span>${label}${cnt?`<span class="cnt">${cnt}</span>`:""}</a>`;
+  $("#nav").innerHTML = `
+    ${a("dashboard","Dashboard","▦")}
+    <div class="grp">Transactions</div>
+    ${a("pr","Purchase Requisition","📝")}
+    ${a("approvals","My Approvals","✔",S.counts.ap)}
+    ${isPurch()?a("canvass","Canvass / RFQ","⚖"):""}
+    ${a("po","Purchase Orders","📄")}
+    ${a("rr","Receiving","📦")}
+    <div class="grp">Master Data</div>
+    ${a("items","Item Master","▤")}
+    ${a("suppliers","Supplier Master","🏢")}
+    ${S.me.role!=="viewer"?a("mreq","Master Data Requests","⇄",S.counts.mr):""}
+    ${isAdmin()?`<div class="grp">Module Admin</div>${a("setup","Setup","⚙")}`:""}`;
+}
+async function route(){
+  const [r, id] = (location.hash.slice(1)||"dashboard").split("/");
+  const R = ROUTES[r] || ROUTES.dashboard;
+  $("#pageTitle").textContent = R.t; $("#topActions").innerHTML = "";
+  $("#side").classList.remove("open");
+  await navCounts().catch(()=>{}); renderNav(r);
+  $("#view").innerHTML = `<div class="empty">Loading…</div>`;
+  try{ await R.f(id); } catch(e){ console.error(e); $("#view").innerHTML = `<div class="card"><b>Something went wrong.</b><div class="muted">${esc(errMsg(e))}</div></div>`; }
+}
+const go = h => { if(location.hash === "#"+h) route(); else location.hash = h; };
+
+// =====================================================================
+// DASHBOARD
+// =====================================================================
+async function viewDashboard(){
+  const me = S.user.id;
+  const q = (t, f) => f(sb.from(t).select("id",{count:"exact",head:true}));
+  const [myDraft, myPending, toCanvass, poDraft, poOpen, apprv, mr] = await Promise.all([
+    q("pur_requisitions", x=>x.eq("requested_by",me).in("status",["draft","rejected"])),
+    q("pur_requisitions", x=>x.eq("requested_by",me).eq("status","pending")),
+    q("pur_requisitions", x=>x.in("status",["approved","canvassing"])),
+    q("pur_purchase_orders", x=>x.in("status",["draft","rejected"])),
+    q("pur_purchase_orders", x=>x.in("status",["approved","sent","partial"])),
+    Promise.resolve({count:S.counts.ap}),
+    isAdmin() ? Promise.resolve({count:S.counts.mr}) : q("pur_master_requests", x=>x.eq("requested_by",me).eq("status","pending")),
+  ]);
+  const k = (n,l,h) => `<div class="kpi" onclick="go('${h}')"><div class="n">${n.count??0}</div><div class="l">${l}</div></div>`;
+  const {data:act} = await sb.from("pur_activity").select("*").order("at",{ascending:false}).limit(15);
+  $("#view").innerHTML = `
+    <div class="kpis">
+      ${k(apprv,"Waiting for my approval","approvals")}
+      ${canRequest()?k(myDraft,"My PR drafts / returned","pr"):""}
+      ${canRequest()?k(myPending,"My PRs pending approval","pr"):""}
+      ${isPurch()?k(toCanvass,"Approved PRs to canvass / order","pr"):""}
+      ${isPurch()?k(poDraft,"PO drafts / returned","po"):""}
+      ${canReceive()?k(poOpen,"Open POs for receiving","po"):""}
+      ${S.me.role!=="viewer"?k(mr, isAdmin()?"Master data requests to review":"My pending master requests","mreq"):""}
+    </div>
+    <div class="card"><h3>Recent activity</h3>
+      ${(act||[]).length ? `<ul class="trail">${act.map(a=>`<li><span class="badge b-draft">${esc(a.doc_type)}</span><b>${esc(a.action)}</b><span class="muted">${esc(a.details||"")}</span><span class="sp" style="flex:1"></span><span class="small muted">${esc(pname(a.actor))} · ${dt(a.at)}</span></li>`).join("")}</ul>` : `<div class="empty">No activity yet.</div>`}
+    </div>
+    <div class="card"><h3>How it works</h3>
+      <div class="small muted" style="line-height:1.7">
+        <b>1. Purchase Requisition</b> — requester picks items from the Item Master and submits. &nbsp;
+        <b>2. Approval</b> — routed per company by amount (Approval Matrix). &nbsp;
+        <b>3. Canvass / RFQ</b> — Purchasing compares supplier quotes and awards per line. &nbsp;
+        <b>4. Purchase Order</b> — one PO per awarded supplier, approved by amount. &nbsp;
+        <b>5. Receiving</b> — warehouse records deliveries against the PO (partial deliveries allowed).<br>
+        New or changed <b>items and suppliers</b> are requested here and approved by the Module Admin before they can be used.
+      </div></div>`;
+}
+
+// =====================================================================
+// SHARED: approvals trail + activity
+// =====================================================================
+async function trailHtml(docId){
+  const [{data:ap}, {data:act}] = await Promise.all([
+    sb.from("pur_approvals").select("*").eq("doc_id",docId).order("round").order("step_no"),
+    sb.from("pur_activity").select("*").eq("doc_id",docId).order("at"),
+  ]);
+  const rounds = [...new Set((ap||[]).map(a=>a.round))];
+  let h = `<div class="card"><h3>Approval trail</h3>`;
+  if(!ap?.length) h += `<div class="muted small">Not yet submitted.</div>`;
+  rounds.forEach(r=>{
+    if(rounds.length>1) h += `<div class="small bold" style="margin-top:6px">Submission #${r}</div>`;
+    h += `<ul class="trail">` + ap.filter(a=>a.round===r).map(a=>`<li><b>Step ${a.step_no}</b> ${esc(a.step_name)} — ${esc(pname(a.approver_id))} ${badge(a.status)} <span class="muted small">${a.acted_at?dt(a.acted_at):""}</span> ${a.remarks?`<span class="small">“${esc(a.remarks)}”</span>`:""}</li>`).join("") + `</ul>`;
+  });
+  h += `</div><div class="card"><h3>History</h3>` + ((act||[]).length ? `<ul class="trail">${act.map(a=>`<li><b>${esc(a.action)}</b><span class="muted">${esc(a.details||"")}</span><span style="flex:1"></span><span class="small muted">${esc(pname(a.actor))} · ${dt(a.at)}</span></li>`).join("")}</ul>` : `<div class="muted small">—</div>`) + `</div>`;
+  return {html:h, approvals:ap||[]};
+}
+function myPendingStep(approvals){
+  const cur = approvals.filter(a=>a.status==="pending");
+  if(!cur.length) return null;
+  const maxRound = Math.max(...approvals.map(a=>a.round));
+  const live = cur.filter(a=>a.round===maxRound);
+  const minStep = Math.min(...live.map(a=>a.step_no));
+  return live.find(a=>a.step_no===minStep && a.approver_id===S.user.id) || null;
+}
+async function decide(appr, decision, after){
+  let remarks = "";
+  if(decision==="reject"){ remarks = await ask("Reject", "Reason for rejecting (sent back to the preparer)"); if(remarks===null) return; }
+  else { remarks = await ask("Approve", "Remarks (optional)", {required:false}); if(remarks===null) return; }
+  await run(()=>rpc("pur_act",{p_approval_id:appr.id, p_decision:decision, p_remarks:remarks}), decision==="approve"?"Approved.":"Rejected.");
+  after ? after() : route();
+}
+function approveButtons(appr){
+  if(!appr) return "";
+  return `<button class="btn ok" id="btnApprove">✔ Approve</button><button class="btn warn" id="btnReject">✖ Reject</button>`;
+}
+function wireApprove(appr){
+  if(!appr) return;
+  $("#btnApprove").onclick = ()=>decide(appr,"approve");
+  $("#btnReject").onclick = ()=>decide(appr,"reject");
+}
+
+// =====================================================================
+// PURCHASE REQUISITION
+// =====================================================================
+const PR_SEL = "*, company:pur_companies(code,name), dept:pur_departments(name)";
+async function viewPRList(){
+  $("#topActions").innerHTML = canRequest() ? `<button class="btn pri" onclick="go('pr-edit/new')">＋ New PR</button>` : "";
+  $("#view").innerHTML = `
+    <div class="filters">
+      <select class="inp" id="fCo"><option value="">All companies</option>${myCompanies().map(c=>`<option value="${c.id}">${esc(c.code)} — ${esc(c.name)}</option>`).join("")}</select>
+      <select class="inp" id="fSt"><option value="">All status</option>${["draft","pending","approved","rejected","canvassing","ordered","closed","cancelled"].map(s=>`<option>${s}</option>`).join("")}</select>
+      <select class="inp" id="fMine"><option value="">Everyone</option><option value="1">Only mine</option></select>
+      <input class="inp" id="fQ" placeholder="Search PR no. / purpose">
+      <button class="btn" id="fX">⭳ Excel</button>
+    </div><div id="prTbl"></div>`;
+  let rows = [];
+  const load = async()=>{
+    let q = sb.from("pur_requisitions").select(PR_SEL).order("created_at",{ascending:false}).limit(500);
+    if($("#fCo").value) q=q.eq("company_id",$("#fCo").value);
+    if($("#fSt").value) q=q.eq("status",$("#fSt").value);
+    if($("#fMine").value) q=q.eq("requested_by",S.user.id);
+    const t=$("#fQ").value.trim(); if(t) q=q.or(`pr_no.ilike.%${t}%,purpose.ilike.%${t}%`);
+    rows = chk(await q);
+    $("#prTbl").innerHTML = rows.length ? `<div class="tbl-wrap"><table class="t"><thead><tr><th>PR No.</th><th>Company</th><th>Department</th><th>Requested by</th><th>Date</th><th>Needed</th><th>Priority</th><th class="num">Est. Total</th><th>Status</th></tr></thead><tbody>
+      ${rows.map(r=>`<tr class="click" onclick="go('pr-edit/${r.id}')"><td class="bold">${esc(r.pr_no)}</td><td>${esc(r.company?.code)}</td><td>${esc(r.dept?.name||"")}</td><td>${esc(pname(r.requested_by))}</td><td>${d8(r.request_date)}</td><td>${d8(r.date_needed)}</td><td>${esc(r.priority)}</td><td class="num">${money(r.total)}</td><td>${badge(r.status)}</td></tr>`).join("")}
+      </tbody></table></div>` : `<div class="card empty">No purchase requisitions found.</div>`;
+  };
+  ["fCo","fSt","fMine"].forEach(i=>$("#"+i).onchange=load); let tm; $("#fQ").oninput=()=>{clearTimeout(tm);tm=setTimeout(load,350);};
+  $("#fX").onclick=()=>exportXlsx(rows.map(r=>({PR_No:r.pr_no,Company:r.company?.code,Department:r.dept?.name,Requested_By:pname(r.requested_by),Date:r.request_date,Date_Needed:r.date_needed,Priority:r.priority,Purpose:r.purpose,Est_Total:Number(r.total),Status:r.status})),"PR_List");
+  await load();
+}
+
+function itemDatalist(){ return `<datalist id="dlItems">${S.items.filter(i=>i.status==="active").map(i=>`<option value="${esc(i.code)} — ${esc(i.description)}"></option>`).join("")}</datalist>`; }
+function itemFromText(v){ const code = String(v||"").split(" — ")[0].trim().toUpperCase(); return S.items.find(i=>i.code===code && i.status==="active"); }
+
+async function viewPR(id){
+  let pr, lines=[];
+  if(id==="new"){
+    if(!canRequest()) throw new Error("You cannot create PRs.");
+    const cos = myCompanies(); if(!cos.length) throw new Error("You are not assigned to any company. Ask the Module Admin.");
+    pr = {id:null, status:"draft", company_id:cos[0].id, request_date:today(), priority:"Normal", requested_by:S.user.id, purpose:"", date_needed:"", department_id:null, total:0};
+  } else {
+    pr = chk(await sb.from("pur_requisitions").select(PR_SEL).eq("id",id).single());
+    lines = chk(await sb.from("pur_pr_lines").select("*").eq("pr_id",id).order("line_no"));
+  }
+  const editable = !pr.id || (["draft","rejected"].includes(pr.status) && (pr.requested_by===S.user.id || isPurch()));
+  const tr = pr.id ? await trailHtml(pr.id) : {html:"", approvals:[]};
+  const myAppr = myPendingStep(tr.approvals);
+  const L = lines.map(l=>({...l}));
+  const {data:pos} = pr.id ? await sb.from("pur_purchase_orders").select("id,po_no,status,total,supplier:pur_suppliers(name)").eq("pr_id",pr.id) : {data:[]};
+  const {data:cvs} = pr.id ? await sb.from("pur_canvasses").select("id,cv_no,status").eq("pr_id",pr.id) : {data:[]};
+
+  const deptOpts = co => S.depts.filter(d=>d.company_id===co && d.active).map(d=>`<option value="${d.id}" ${d.id===pr.department_id?"selected":""}>${esc(d.name)}</option>`).join("");
+  $("#view").innerHTML = `
+    ${itemDatalist()}
+    <div class="doc-head"><div><h3>${pr.id?esc(pr.pr_no):"New Purchase Requisition"}</h3><div class="muted small">${pr.id?`Requested by ${esc(pname(pr.requested_by))} · ${d8(pr.request_date)}`:""}</div></div>${pr.id?badge(pr.status):""}<div class="sp"></div>
+      <div class="row">
+        ${approveButtons(myAppr)}
+        ${editable?`<button class="btn" id="bSave">💾 Save draft</button><button class="btn pri" id="bSubmit">➤ Submit for approval</button>`:""}
+        ${pr.id && pr.status==="draft" && editable?`<button class="btn warn" id="bDel">Delete</button>`:""}
+        ${pr.id && isPurch() && ["approved","canvassing"].includes(pr.status)?`<button class="btn pri" id="bCanvass">⚖ Canvass / RFQ</button><button class="btn" id="bDirectPO">📄 Direct PO</button>`:""}
+        ${pr.id && ["pending","rejected","approved","canvassing"].includes(pr.status) && (pr.requested_by===S.user.id||isPurch())?`<button class="btn warn" id="bCancel">Cancel PR</button>`:""}
+        ${pr.id?`<button class="btn" id="bPrint">🖨 Print</button>`:""}
+      </div></div>
+    ${pr.status==="rejected"?`<div class="note">This PR was <b>rejected</b>. Edit it and submit again.</div>`:""}
+    <div class="card"><div class="grid">
+      <div class="fld"><label>Company</label><select id="pCo" ${editable&&!pr.id?"":"disabled"}>${myCompanies().concat(pr.id&&!myCompanies().some(c=>c.id===pr.company_id)?[comp(pr.company_id)]:[]).map(c=>`<option value="${c.id}" ${c.id===pr.company_id?"selected":""}>${esc(c.code)} — ${esc(c.name)}</option>`).join("")}</select></div>
+      <div class="fld"><label>Department</label><select id="pDept" ${editable?"":"disabled"}><option value="">—</option>${deptOpts(pr.company_id)}</select></div>
+      <div class="fld"><label>Date needed</label><input type="date" id="pNeed" value="${esc(pr.date_needed||"")}" ${editable?"":"disabled"}></div>
+      <div class="fld"><label>Priority</label><select id="pPri" ${editable?"":"disabled"}>${["Normal","Urgent","Critical"].map(p=>`<option ${p===pr.priority?"selected":""}>${p}</option>`).join("")}</select></div>
+    </div>
+    <div class="fld" style="margin-top:12px"><label>Purpose / justification</label><textarea id="pPurpose" ${editable?"":"disabled"}>${esc(pr.purpose||"")}</textarea></div></div>
+    <div class="card"><div class="toolbar"><h3 style="margin:0">Items</h3><div class="sp"></div>${editable?`<button class="btn sm" id="bAddLine">＋ Add line</button><button class="btn sm" id="bReqItem">Item not in master? Request new item</button>`:""}</div>
+      <div class="tbl-wrap"><table class="t" id="prLines"><thead><tr><th>#</th><th style="min-width:260px">Item (from Item Master)</th><th>UOM</th><th class="num">Qty</th><th class="num">Est. unit cost</th><th class="num">Amount</th><th>Remarks</th>${editable?"<th></th>":""}</tr></thead><tbody></tbody>
+      <tfoot><tr><td colspan="5" class="right">Estimated total</td><td class="num" id="prTot"></td><td colspan="${editable?2:1}"></td></tr></tfoot></table></div></div>
+    ${(cvs||[]).length||(pos||[]).length?`<div class="card"><h3>Linked documents</h3><ul class="trail">
+      ${(cvs||[]).map(c=>`<li><a href="#cv-edit/${c.id}">${esc(c.cv_no)}</a> Canvass ${badge(c.status)}</li>`).join("")}
+      ${(pos||[]).map(p=>`<li><a href="#po-edit/${p.id}">${esc(p.po_no)}</a> ${esc(p.supplier?.name)} · ₱${money(p.total)} ${badge(p.status)}</li>`).join("")}</ul></div>`:""}
+    ${tr.html}`;
+
+  const tbody = $("#prLines tbody");
+  const draw = ()=>{
+    tbody.innerHTML = L.map((l,i)=>{
+      const it = S.items.find(x=>x.id===l.item_id);
+      return editable ? `<tr data-i="${i}"><td>${i+1}</td>
+        <td><input class="inp li-item" list="dlItems" value="${it?esc(it.code+" — "+it.description):esc(l.description||"")}" placeholder="Type code or description"></td>
+        <td><input class="inp li-uom" value="${esc(l.uom||"")}" style="width:70px" readonly></td>
+        <td><input class="inp li-qty right" value="${l.qty??""}" style="width:90px" inputmode="decimal"></td>
+        <td><input class="inp li-cost right" value="${l.est_unit_cost??""}" style="width:110px" inputmode="decimal"></td>
+        <td class="num li-amt">${money(num(l.qty)*num(l.est_unit_cost))}</td>
+        <td><input class="inp li-rem" value="${esc(l.remarks||"")}"></td>
+        <td><button class="btn sm warn li-del">✕</button></td></tr>`
+      : `<tr><td>${i+1}</td><td>${esc(it?.code||"")} ${esc(l.description)}</td><td>${esc(l.uom)}</td><td class="num">${qtyf(l.qty)}</td><td class="num">${money(l.est_unit_cost)}</td><td class="num">${money(l.amount)}</td><td>${esc(l.remarks||"")}</td></tr>`;
+    }).join("") || `<tr><td colspan="8" class="empty">No items yet.</td></tr>`;
+    $("#prTot").textContent = money(L.reduce((s,l)=>s+num(l.qty)*num(l.est_unit_cost),0));
+  };
+  draw();
+  if(editable){
+    tbody.addEventListener("change", e=>{
+      const tr=e.target.closest("tr"); if(!tr) return; const l=L[+tr.dataset.i];
+      if(e.target.classList.contains("li-item")){
+        const it = itemFromText(e.target.value);
+        if(it){ l.item_id=it.id; l.description=it.description; l.uom=it.uom; if(!num(l.est_unit_cost)) l.est_unit_cost=it.last_price||0; }
+        else { l.item_id=null; l.description=e.target.value; toast("Pick an item from the Item Master list. If it is missing, request a new item.","err"); }
+        setTimeout(draw,0);
+      }
+    });
+    tbody.addEventListener("input", e=>{
+      const tr=e.target.closest("tr"); if(!tr) return; const l=L[+tr.dataset.i];
+      if(e.target.classList.contains("li-qty")) l.qty=e.target.value;
+      if(e.target.classList.contains("li-cost")) l.est_unit_cost=e.target.value;
+      if(e.target.classList.contains("li-rem")) l.remarks=e.target.value;
+      $(".li-amt",tr).textContent = money(num(l.qty)*num(l.est_unit_cost));
+      $("#prTot").textContent = money(L.reduce((s,l)=>s+num(l.qty)*num(l.est_unit_cost),0));
+    });
+    tbody.addEventListener("click", e=>{ if(e.target.classList.contains("li-del")){ L.splice(+e.target.closest("tr").dataset.i,1); draw(); }});
+    $("#bAddLine").onclick = ()=>{ L.push({item_id:null,description:"",uom:"",qty:"",est_unit_cost:"",remarks:""}); draw(); $$(".li-item").pop()?.focus(); };
+    $("#bReqItem").onclick = ()=>masterRequestForm("item","create");
+    $("#pCo").onchange = ()=>{ pr.company_id=$("#pCo").value; $("#pDept").innerHTML=`<option value="">—</option>`+deptOpts(pr.company_id); };
+    const save = async ()=>{
+      const bad = L.find(l=>!l.item_id); if(bad) throw new Error("Every line must use an item from the Item Master.");
+      if(L.some(l=>num(l.qty)<=0)) throw new Error("Quantity must be more than zero.");
+      const head = {company_id:$("#pCo").value, department_id:$("#pDept").value||null, date_needed:$("#pNeed").value||null, priority:$("#pPri").value, purpose:$("#pPurpose").value.trim()};
+      let pid = pr.id;
+      if(!pid){ pid = chk(await sb.from("pur_requisitions").insert({...head, requested_by:S.user.id}).select("id").single()).id; }
+      else chk(await sb.from("pur_requisitions").update(head).eq("id",pid));
+      chk(await sb.from("pur_pr_lines").delete().eq("pr_id",pid));
+      if(L.length) chk(await sb.from("pur_pr_lines").insert(L.map((l,i)=>({pr_id:pid,line_no:i+1,item_id:l.item_id,description:l.description,uom:l.uom||"PC",qty:num(l.qty),est_unit_cost:num(l.est_unit_cost),remarks:l.remarks||""}))));
+      return pid;
+    };
+    $("#bSave").onclick = async ()=>{ const pid = await run(save,"Saved."); if(pid && !pr.id) go("pr-edit/"+pid); else route(); };
+    $("#bSubmit").onclick = async ()=>{
+      if(!L.length) return toast("Add at least one item.","err");
+      const pid = await run(save); if(!pid) return;
+      try{ await rpc("pur_submit",{p_doc_type:"PR",p_id:pid}); toast("Submitted for approval.","ok"); }
+      catch(e){ toast(errMsg(e),"err"); }
+      go("pr-edit/"+pid);
+    };
+    if($("#bDel")) $("#bDel").onclick = async ()=>{ if(!await confirmBox("Delete draft","Delete this draft PR?")) return; await run(async()=>chk(await sb.from("pur_requisitions").delete().eq("id",pr.id)),"Deleted."); go("pr"); };
+  }
+  if($("#bCancel")) $("#bCancel").onclick = async ()=>{ const r=await ask("Cancel PR","Reason for cancelling"); if(!r) return; await run(()=>rpc("pur_cancel",{p_doc_type:"PR",p_id:pr.id,p_reason:r}),"PR cancelled."); route(); };
+  if($("#bCanvass")) $("#bCanvass").onclick = async ()=>{ const cv = await run(()=>rpc("pur_start_canvass",{p_pr:pr.id})); if(cv) go("cv-edit/"+cv); };
+  if($("#bDirectPO")) $("#bDirectPO").onclick = ()=>directPO(pr);
+  if($("#bPrint")) $("#bPrint").onclick = ()=>printPR(pr, lines, tr.approvals);
+  wireApprove(myAppr);
+}
+
+function supplierOptions(sel){ return S.suppliers.filter(s=>s.status==="active").map(s=>`<option value="${s.id}" ${s.id===sel?"selected":""}>${esc(s.name)} (${esc(s.code)})</option>`).join(""); }
+function directPO(pr){
+  modal({title:"Direct PO (no canvass)", body:`<div class="note info">Creates a draft PO for all lines of ${esc(pr.pr_no)} using the estimated costs. You can adjust prices before submitting.</div>
+    <div class="fld"><label>Supplier (approved suppliers only)</label><select id="dpS"><option value="">— select —</option>${supplierOptions()}</select></div>`,
+    foot:`<button class="btn" data-close>Cancel</button><button class="btn pri" id="dpOk">Create PO</button>`,
+    onOpen:(el,close)=>{ $("#dpOk",el).onclick = async ()=>{ const s=$("#dpS",el).value; if(!s) return toast("Select a supplier.","err"); const po = await run(()=>rpc("pur_po_from_pr",{p_pr:pr.id,p_supplier:s}),"Draft PO created."); close(); if(po) go("po-edit/"+po); }; }});
+}
+
+// =====================================================================
+// APPROVALS INBOX
+// =====================================================================
+async function viewApprovals(){
+  const mine = chk(await sb.from("pur_approvals").select("*").eq("approver_id",S.user.id).eq("status","pending"));
+  const ids = [...new Set(mine.map(a=>a.doc_id))];
+  let all = ids.length ? chk(await sb.from("pur_approvals").select("doc_id,round,step_no,status").in("doc_id",ids)) : [];
+  const ready = mine.filter(a=>{ const live = all.filter(x=>x.doc_id===a.doc_id && x.round===a.round && x.status==="pending"); return a.step_no===Math.min(...live.map(x=>x.step_no)); });
+  const waiting = mine.filter(a=>!ready.includes(a));
+  const prIds = ready.filter(a=>a.doc_type==="PR").map(a=>a.doc_id), poIds = ready.filter(a=>a.doc_type==="PO").map(a=>a.doc_id);
+  const [prs, pos] = await Promise.all([
+    prIds.length ? sb.from("pur_requisitions").select(PR_SEL).in("id",prIds) : {data:[]},
+    poIds.length ? sb.from("pur_purchase_orders").select("*, company:pur_companies(code), supplier:pur_suppliers(name)").in("id",poIds) : {data:[]},
+  ]);
+  const docs = Object.fromEntries([...(prs.data||[]),...(pos.data||[])].map(d=>[d.id,d]));
+  const {data:hist} = await sb.from("pur_approvals").select("*").eq("approver_id",S.user.id).in("status",["approved","rejected"]).order("acted_at",{ascending:false}).limit(30);
+  $("#view").innerHTML = `
+    <div class="card"><h3>Waiting for my decision (${ready.length})</h3>
+    ${ready.length?`<div class="tbl-wrap"><table class="t"><thead><tr><th>Type</th><th>Doc No.</th><th>Company</th><th>Details</th><th>Step</th><th class="num">Amount</th><th>Submitted</th><th></th></tr></thead><tbody>
+      ${ready.map(a=>{ const d=docs[a.doc_id]||{}; const isPR=a.doc_type==="PR";
+        return `<tr><td><span class="badge ${isPR?"b-pending":"b-sent"}">${a.doc_type}</span></td><td class="bold"><a href="#${isPR?"pr-edit":"po-edit"}/${a.doc_id}">${esc(isPR?d.pr_no:d.po_no)}</a></td><td>${esc(d.company?.code||"")}</td>
+        <td>${isPR?`${esc(pname(d.requested_by))} — ${esc((d.purpose||"").slice(0,60))}`:esc(d.supplier?.name||"")}</td><td>${a.step_no} ${esc(a.step_name)}</td><td class="num">${money(d.total)}</td><td>${dt(d.submitted_at)}</td>
+        <td class="row"><button class="btn sm ok" data-a="${a.id}" data-d="approve">Approve</button><button class="btn sm warn" data-a="${a.id}" data-d="reject">Reject</button></td></tr>`;}).join("")}
+      </tbody></table></div>`:`<div class="empty">Nothing waiting for you. 🎉</div>`}</div>
+    ${waiting.length?`<div class="card"><h3>Coming to you after earlier steps (${waiting.length})</h3><div class="small muted">${waiting.map(a=>`${a.doc_type} — step ${a.step_no}`).join(" · ")}</div></div>`:""}
+    <div class="card"><h3>My recent decisions</h3>${(hist||[]).length?`<ul class="trail">${hist.map(a=>`<li><a href="#${a.doc_type==="PR"?"pr-edit":"po-edit"}/${a.doc_id}">${a.doc_type} document</a> step ${a.step_no} ${badge(a.status)} <span class="muted small">${dt(a.acted_at)}</span> ${a.remarks?`“${esc(a.remarks)}”`:""}</li>`).join("")}</ul>`:`<div class="muted small">—</div>`}</div>`;
+  $$("[data-a]").forEach(b=>b.onclick=()=>decide(ready.find(a=>a.id===b.dataset.a), b.dataset.d));
+}
+
+// =====================================================================
+// CANVASS / RFQ
+// =====================================================================
+async function viewCVList(){
+  const rows = chk(await sb.from("pur_canvasses").select("*, company:pur_companies(code), pr:pur_requisitions(pr_no,purpose)").order("created_at",{ascending:false}).limit(300));
+  const {data:toDo} = await sb.from("pur_requisitions").select(PR_SEL).eq("status","approved").order("approved_at");
+  $("#view").innerHTML = `
+    <div class="card"><h3>Approved PRs ready for canvass (${(toDo||[]).length})</h3>
+      ${(toDo||[]).length?`<div class="tbl-wrap"><table class="t"><thead><tr><th>PR No.</th><th>Company</th><th>Purpose</th><th>Needed</th><th class="num">Est. Total</th><th></th></tr></thead><tbody>
+      ${toDo.map(r=>`<tr><td><a href="#pr-edit/${r.id}">${esc(r.pr_no)}</a></td><td>${esc(r.company?.code)}</td><td>${esc((r.purpose||"").slice(0,70))}</td><td>${d8(r.date_needed)}</td><td class="num">${money(r.total)}</td><td><button class="btn sm pri" data-pr="${r.id}">Start canvass</button></td></tr>`).join("")}</tbody></table></div>`:`<div class="muted small">None.</div>`}</div>
+    <div class="card"><h3>Canvass sheets</h3>
+      ${rows.length?`<div class="tbl-wrap"><table class="t"><thead><tr><th>CV No.</th><th>PR No.</th><th>Company</th><th>Purpose</th><th>Created</th><th>Status</th></tr></thead><tbody>
+      ${rows.map(r=>`<tr class="click" onclick="go('cv-edit/${r.id}')"><td class="bold">${esc(r.cv_no)}</td><td>${esc(r.pr?.pr_no)}</td><td>${esc(r.company?.code)}</td><td>${esc((r.pr?.purpose||"").slice(0,60))}</td><td>${d8(r.created_at)}</td><td>${badge(r.status)}</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">No canvass yet.</div>`}</div>`;
+  $$("[data-pr]").forEach(b=>b.onclick=async()=>{ const cv=await run(()=>rpc("pur_start_canvass",{p_pr:b.dataset.pr})); if(cv) go("cv-edit/"+cv); });
+}
+
+async function viewCV(id){
+  const cv = chk(await sb.from("pur_canvasses").select("*, pr:pur_requisitions(*), company:pur_companies(*)").eq("id",id).single());
+  const [lines, css, prices] = await Promise.all([
+    sb.from("pur_pr_lines").select("*").eq("pr_id",cv.pr_id).order("line_no").then(chk),
+    sb.from("pur_canvass_suppliers").select("*").eq("canvass_id",id).then(chk),
+    sb.from("pur_canvass_prices").select("*").eq("canvass_id",id).then(chk),
+  ]);
+  const editable = cv.status==="draft" && isPurch();
+  // local model
+  const SUP = css.map(c=>({...c}));
+  const P = {}; prices.forEach(p=>{ const cs=SUP.find(s=>s.id===p.cs_id); if(cs) P[cs.supplier_id+"|"+p.pr_line_id]=p.unit_price; });
+  const AW = {}; prices.filter(p=>p.awarded).forEach(p=>{ const cs=SUP.find(s=>s.id===p.cs_id); if(cs) AW[p.pr_line_id]=cs.supplier_id; });
+  const {data:pos} = await sb.from("pur_purchase_orders").select("id,po_no,status,total,supplier:pur_suppliers(name)").eq("canvass_id",id);
+  const sname = sid => S.suppliers.find(s=>s.id===sid)?.name || "?";
+
+  $("#view").innerHTML = `
+    <div class="doc-head"><div><h3>${esc(cv.cv_no)}</h3><div class="muted small">For <a href="#pr-edit/${cv.pr_id}">${esc(cv.pr.pr_no)}</a> · ${esc(cv.company.code)} · ${esc(cv.pr.purpose||"")}</div></div>${badge(cv.status)}<div class="sp"></div>
+      <div class="row">${editable?`<button class="btn" id="cAddS">＋ Add supplier</button><button class="btn" id="cLow">Award lowest per line</button><button class="btn" id="cSave">💾 Save</button><button class="btn pri" id="cAward">✔ Award & generate POs</button><button class="btn warn" id="cCancel">Cancel</button>`:""}
+      <button class="btn" id="cPrint">🖨 Print abstract</button></div></div>
+    ${editable?`<div class="note info">Add the suppliers who quoted, enter their unit prices, then tick the winning supplier for each line. Awarding creates one draft PO per winning supplier. Suppliers must already be approved in the Supplier Master.</div>`:""}
+    <div class="card"><div class="tbl-wrap"><table class="t cv-grid" id="cvT"></table></div></div>
+    ${(pos||[]).length?`<div class="card"><h3>Generated POs</h3><ul class="trail">${pos.map(p=>`<li><a href="#po-edit/${p.id}">${esc(p.po_no)}</a> ${esc(p.supplier?.name)} · ₱${money(p.total)} ${badge(p.status)}</li>`).join("")}</ul></div>`:""}`;
+
+  const draw = ()=>{
+    const lowest = {};
+    lines.forEach(l=>{ let best=null; SUP.forEach(s=>{ const v=P[s.supplier_id+"|"+l.id]; if(v!==undefined&&v!==""&&(best===null||num(v)<best)) best=num(v); }); lowest[l.id]=best; });
+    const tot = s => lines.reduce((a,l)=>{ const v=P[s.supplier_id+"|"+l.id]; return a+(v!==undefined&&v!==""?num(v)*num(l.qty):0); },0);
+    const awTot = s => lines.reduce((a,l)=>AW[l.id]===s.supplier_id?a+num(P[s.supplier_id+"|"+l.id])*num(l.qty):a,0);
+    $("#cvT").innerHTML = `<thead><tr><th>Item</th><th>Qty</th>${SUP.map((s,i)=>`<th style="min-width:150px">${esc(sname(s.supplier_id))}${editable?` <button class="btn link sm" data-rs="${i}" title="Remove">✕</button>`:""}</th>`).join("")}</tr>
+      <tr><th class="small">Terms / lead time / quote ref</th><th></th>${SUP.map((s,i)=>editable?`<th style="white-space:normal;text-transform:none;font-weight:400"><div style="display:flex;flex-direction:column;gap:4px;max-width:200px;margin:auto"><input class="inp" data-si="${i}" data-k="payment_terms" placeholder="Terms" value="${esc(s.payment_terms||"")}"><input class="inp" data-si="${i}" data-k="lead_time" placeholder="Lead time" value="${esc(s.lead_time||"")}"><input class="inp" data-si="${i}" data-k="quote_ref" placeholder="Quote ref" value="${esc(s.quote_ref||"")}"></div></th>`:`<th class="small" style="font-weight:400;text-transform:none">${esc(s.payment_terms||"")}<br>${esc(s.lead_time||"")}<br>${esc(s.quote_ref||"")}</th>`).join("")}</tr></thead>
+      <tbody>${lines.map(l=>`<tr><td><b>${esc(l.description)}</b><div class="small muted">Est. ₱${money(l.est_unit_cost)} / ${esc(l.uom)}</div></td><td>${qtyf(l.qty)} ${esc(l.uom)}</td>
+        ${SUP.map(s=>{ const k=s.supplier_id+"|"+l.id, v=P[k]; const low = v!==undefined&&v!==""&&num(v)===lowest[l.id];
+          return `<td class="${low?"low":""}">${editable?`<input class="inp right" data-p="${k}" value="${v??""}" style="width:110px" inputmode="decimal"><label class="chk" style="justify-content:center;margin-top:4px"><input type="radio" name="aw_${l.id}" data-aw="${l.id}" value="${s.supplier_id}" ${AW[l.id]===s.supplier_id?"checked":""}> award</label>`
+            : `${v!==undefined?money(v):"—"} ${AW[l.id]===s.supplier_id?"<div>🏆 <b>awarded</b></div>":""}`}</td>`; }).join("")}</tr>`).join("")}</tbody>
+      <tfoot><tr><td>Total quoted</td><td></td>${SUP.map(s=>`<td>${money(tot(s))}</td>`).join("")}</tr><tr><td>Total awarded</td><td></td>${SUP.map(s=>`<td>${money(awTot(s))}</td>`).join("")}</tr></tfoot>`;
+    if(!SUP.length) $("#cvT").innerHTML += `<tbody><tr><td colspan="3" class="empty">Add the suppliers who submitted quotations.</td></tr></tbody>`;
+  };
+  draw();
+  if(editable){
+    $("#cvT").addEventListener("input", e=>{ const k=e.target.dataset.p; if(k){ P[k]=e.target.value; } const si=e.target.dataset.si; if(si!==undefined) SUP[+si][e.target.dataset.k]=e.target.value; });
+    $("#cvT").addEventListener("change", e=>{ if(e.target.dataset.aw){ AW[e.target.dataset.aw]=e.target.value; } if(e.target.dataset.p) draw(); });
+    $("#cvT").addEventListener("click", e=>{ const r=e.target.dataset.rs; if(r!==undefined){ const s=SUP.splice(+r,1)[0]; lines.forEach(l=>{ delete P[s.supplier_id+"|"+l.id]; if(AW[l.id]===s.supplier_id) delete AW[l.id]; }); draw(); } });
+    $("#cAddS").onclick = ()=>modal({title:"Add supplier", body:`<div class="fld"><label>Supplier</label><select id="asS"><option value="">— select —</option>${supplierOptions()}</select></div><div class="small muted" style="margin-top:8px">Missing supplier? <a href="javascript:void 0" id="asReq">Request a new supplier</a> — the Module Admin must approve it first.</div>`,
+      foot:`<button class="btn" data-close>Cancel</button><button class="btn pri" id="asOk">Add</button>`,
+      onOpen:(el,close)=>{ $("#asReq",el).onclick=()=>{close();masterRequestForm("supplier","create");}; $("#asOk",el).onclick=()=>{ const v=$("#asS",el).value; if(!v) return; if(SUP.some(s=>s.supplier_id===v)) return toast("Already added.","err"); const sp=S.suppliers.find(s=>s.id===v); SUP.push({supplier_id:v,payment_terms:sp?.payment_terms||"",lead_time:"",quote_ref:""}); close(); draw(); }; }});
+    $("#cLow").onclick = ()=>{ lines.forEach(l=>{ let best=null,bs=null; SUP.forEach(s=>{ const v=P[s.supplier_id+"|"+l.id]; if(v!==undefined&&v!==""&&(best===null||num(v)<best)){best=num(v);bs=s.supplier_id;} }); if(bs) AW[l.id]=bs; }); draw(); };
+    const save = async ()=>{
+      // suppliers
+      const keep = SUP.filter(s=>s.id).map(s=>s.id);
+      const old = css.map(c=>c.id).filter(x=>!keep.includes(x));
+      if(old.length) chk(await sb.from("pur_canvass_suppliers").delete().in("id",old));
+      for(const s of SUP){
+        const row = {canvass_id:id, supplier_id:s.supplier_id, payment_terms:s.payment_terms||"", lead_time:s.lead_time||"", quote_ref:s.quote_ref||""};
+        if(s.id) chk(await sb.from("pur_canvass_suppliers").update(row).eq("id",s.id));
+        else s.id = chk(await sb.from("pur_canvass_suppliers").insert(row).select("id").single()).id;
+      }
+      chk(await sb.from("pur_canvass_prices").delete().eq("canvass_id",id));
+      const rows=[]; SUP.forEach(s=>lines.forEach(l=>{ const v=P[s.supplier_id+"|"+l.id]; if(v!==undefined&&v!=="") rows.push({canvass_id:id,cs_id:s.id,pr_line_id:l.id,unit_price:num(v),awarded:AW[l.id]===s.supplier_id}); }));
+      const awardedNoPrice = lines.filter(l=>AW[l.id] && (P[AW[l.id]+"|"+l.id]===undefined || P[AW[l.id]+"|"+l.id]===""));
+      if(awardedNoPrice.length) throw new Error("An awarded supplier has no price for: "+awardedNoPrice.map(l=>l.description).join(", "));
+      if(rows.length) chk(await sb.from("pur_canvass_prices").insert(rows));
+      return true;
+    };
+    $("#cSave").onclick = async ()=>{ await run(save,"Canvass saved."); route(); };
+    $("#cAward").onclick = async ()=>{
+      if(!await confirmBox("Award canvass","This locks the canvass and creates a draft PO for each winning supplier. Continue?")) return;
+      const ok = await run(save); if(!ok) return;
+      const n = await run(()=>rpc("pur_award_canvass",{p_cv:id})); if(n!==undefined){ toast(n+" draft PO(s) created.","ok"); route(); }
+    };
+    $("#cCancel").onclick = async ()=>{ const r=await ask("Cancel canvass","Reason"); if(!r) return; await run(()=>rpc("pur_cancel",{p_doc_type:"CV",p_id:id,p_reason:r}),"Canvass cancelled."); go("canvass"); };
+  }
+  $("#cPrint").onclick = ()=>printCanvass(cv, lines, SUP, P, AW);
+}
+
+// =====================================================================
+// PURCHASE ORDER
+// =====================================================================
+const PO_SEL = "*, company:pur_companies(*), supplier:pur_suppliers(*), pr:pur_requisitions(pr_no,purpose,requested_by)";
+async function viewPOList(){
+  $("#topActions").innerHTML = isPurch() ? `<button class="btn" onclick="newManualPO()">＋ PO without PR</button>` : "";
+  $("#view").innerHTML = `
+    <div class="filters">
+      <select class="inp" id="fCo"><option value="">All companies</option>${myCompanies().map(c=>`<option value="${c.id}">${esc(c.code)}</option>`).join("")}</select>
+      <select class="inp" id="fSt"><option value="">All status</option>${["draft","pending","approved","rejected","sent","partial","received","closed","cancelled"].map(s=>`<option>${s}</option>`).join("")}</select>
+      <select class="inp" id="fSup"><option value="">All suppliers</option>${S.suppliers.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("")}</select>
+      <input class="inp" id="fQ" placeholder="Search PO no.">
+      <button class="btn" id="fX">⭳ Excel</button>
+    </div><div id="poTbl"></div>`;
+  let rows=[];
+  const load = async()=>{
+    let q = sb.from("pur_purchase_orders").select(PO_SEL).order("created_at",{ascending:false}).limit(500);
+    if($("#fCo").value) q=q.eq("company_id",$("#fCo").value);
+    if($("#fSt").value) q=q.eq("status",$("#fSt").value);
+    if($("#fSup").value) q=q.eq("supplier_id",$("#fSup").value);
+    const t=$("#fQ").value.trim(); if(t) q=q.ilike("po_no",`%${t}%`);
+    rows = chk(await q);
+    $("#poTbl").innerHTML = rows.length ? `<div class="tbl-wrap"><table class="t"><thead><tr><th>PO No.</th><th>Company</th><th>Supplier</th><th>PR No.</th><th>PO date</th><th>Delivery</th><th class="num">Total</th><th>Status</th></tr></thead><tbody>
+      ${rows.map(r=>`<tr class="click" onclick="go('po-edit/${r.id}')"><td class="bold">${esc(r.po_no)}</td><td>${esc(r.company?.code)}</td><td>${esc(r.supplier?.name)}</td><td>${esc(r.pr?.pr_no||"—")}</td><td>${d8(r.po_date)}</td><td>${d8(r.delivery_date)}</td><td class="num">${money(r.total)}</td><td>${badge(r.status)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="card empty">No purchase orders found.</div>`;
+  };
+  ["fCo","fSt","fSup"].forEach(i=>$("#"+i).onchange=load); let tm; $("#fQ").oninput=()=>{clearTimeout(tm);tm=setTimeout(load,350);};
+  $("#fX").onclick=()=>exportXlsx(rows.map(r=>({PO_No:r.po_no,Company:r.company?.code,Supplier:r.supplier?.name,PR_No:r.pr?.pr_no,PO_Date:r.po_date,Delivery_Date:r.delivery_date,VAT:r.vat_type,Subtotal:Number(r.subtotal),VAT_Amount:Number(r.vat_amount),Total:Number(r.total),Status:r.status})),"PO_List");
+  await load();
+}
+function newManualPO(){
+  modal({title:"New PO without PR", body:`<div class="note">Use this only for purchases that have no PR (e.g. repeat orders). The PO still goes through the approval matrix.</div>
+    <div class="fld" style="margin-bottom:10px"><label>Company</label><select id="mpC">${myCompanies().map(c=>`<option value="${c.id}">${esc(c.code)} — ${esc(c.name)}</option>`).join("")}</select></div>
+    <div class="fld"><label>Supplier</label><select id="mpS"><option value="">— select —</option>${supplierOptions()}</select></div>`,
+    foot:`<button class="btn" data-close>Cancel</button><button class="btn pri" id="mpOk">Create</button>`,
+    onOpen:(el,close)=>{ $("#mpOk",el).onclick=async()=>{ const s=$("#mpS",el).value, c=$("#mpC",el).value; if(!s) return toast("Select a supplier.","err"); const sp=S.suppliers.find(x=>x.id===s);
+      const r = await run(async()=>chk(await sb.from("pur_purchase_orders").insert({company_id:c,supplier_id:s,created_by:S.user.id,payment_terms:sp.payment_terms||"",vat_type:sp.vat_type==="NON-VAT"?"NON-VAT":"VAT-EXCLUSIVE",delivery_address:comp(c).address||""}).select("id").single()));
+      close(); if(r) go("po-edit/"+r.id); }; }});
+}
+async function viewPO(id){
+  const po = chk(await sb.from("pur_purchase_orders").select(PO_SEL).eq("id",id).single());
+  const lines = chk(await sb.from("pur_po_lines").select("*").eq("po_id",id).order("line_no"));
+  const {data:rrs} = await sb.from("pur_receivings").select("*").eq("po_id",id).order("created_at");
+  const editable = isPurch() && ["draft","rejected"].includes(po.status);
+  const tr = await trailHtml(id); const myAppr = myPendingStep(tr.approvals);
+  const L = lines.map(l=>({...l}));
+  $("#view").innerHTML = `
+    ${itemDatalist()}
+    <div class="doc-head"><div><h3>${esc(po.po_no)}</h3><div class="muted small">${esc(po.company.name)} ${po.pr?`· from <a href="#pr-edit/${po.pr_id}">${esc(po.pr.pr_no)}</a>`:""} ${po.canvass_id?`· <a href="#cv-edit/${po.canvass_id}">canvass</a>`:""}</div></div>${badge(po.status)}<div class="sp"></div>
+      <div class="row">${approveButtons(myAppr)}
+        ${editable?`<button class="btn" id="oSave">💾 Save</button><button class="btn pri" id="oSubmit">➤ Submit for approval</button>`:""}
+        ${editable&&po.status==="draft"&&!po.pr_id?`<button class="btn warn" id="oDel">Delete</button>`:""}
+        ${isPurch()&&po.status==="approved"?`<button class="btn" id="oSent">✉ Mark as sent</button>`:""}
+        ${canReceive()&&["approved","sent","partial"].includes(po.status)?`<button class="btn pri" id="oRecv">📦 Receive delivery</button>`:""}
+        ${isPurch()&&!["partial","received","closed","cancelled"].includes(po.status)?`<button class="btn warn" id="oCancel">Cancel PO</button>`:""}
+        <button class="btn" id="oPrint">🖨 Print PO</button></div></div>
+    ${po.status==="rejected"?`<div class="note">This PO was <b>rejected</b>. Adjust it and submit again.</div>`:""}
+    <div class="card"><div class="grid">
+      <div class="fld"><label>Supplier</label><input value="${esc(po.supplier.name)} (${esc(po.supplier.code)})" disabled></div>
+      <div class="fld"><label>PO date</label><input type="date" id="oDate" value="${esc(po.po_date||"")}" ${editable?"":"disabled"}></div>
+      <div class="fld"><label>Delivery date</label><input type="date" id="oDel8" value="${esc(po.delivery_date||"")}" ${editable?"":"disabled"}></div>
+      <div class="fld"><label>Payment terms</label><input id="oTerms" value="${esc(po.payment_terms||"")}" ${editable?"":"disabled"}></div>
+      <div class="fld"><label>VAT</label><select id="oVat" ${editable?"":"disabled"}>${["VAT-EXCLUSIVE","VAT-INCLUSIVE","NON-VAT"].map(v=>`<option ${v===po.vat_type?"selected":""}>${v}</option>`).join("")}</select></div>
+    </div>
+    <div class="grid" style="margin-top:12px"><div class="fld"><label>Deliver to</label><textarea id="oAddr" ${editable?"":"disabled"}>${esc(po.delivery_address||"")}</textarea></div>
+    <div class="fld"><label>Remarks / instructions</label><textarea id="oRem" ${editable?"":"disabled"}>${esc(po.remarks||"")}</textarea></div></div></div>
+    <div class="card"><div class="toolbar"><h3 style="margin:0">Items</h3><div class="sp"></div>${editable&&!po.pr_id?`<button class="btn sm" id="oAdd">＋ Add line</button>`:""}</div>
+      <div class="tbl-wrap"><table class="t" id="poLines"><thead><tr><th>#</th><th>Item</th><th>UOM</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th><th class="num">Received</th>${editable&&!po.pr_id?"<th></th>":""}</tr></thead><tbody></tbody>
+      <tfoot><tr><td colspan="5" class="right">Subtotal (VAT-ex)</td><td class="num" id="tSub"></td><td colspan="2"></td></tr><tr><td colspan="5" class="right">VAT 12%</td><td class="num" id="tVat"></td><td colspan="2"></td></tr><tr><td colspan="5" class="right">TOTAL</td><td class="num" id="tTot"></td><td colspan="2"></td></tr></tfoot></table></div>
+      ${editable&&po.pr_id?`<div class="small muted" style="margin-top:6px">Lines come from the PR; you may adjust qty (not above the PR) and unit price.</div>`:""}</div>
+    ${(rrs||[]).length?`<div class="card"><h3>Receiving reports</h3><ul class="trail">${rrs.map(r=>`<li><a href="#rr-view/${r.id}">${esc(r.rr_no)}</a> ${d8(r.received_date)} · DR ${esc(r.dr_no||"—")} · SI ${esc(r.invoice_no||"—")} · by ${esc(pname(r.received_by))}</li>`).join("")}</ul></div>`:""}
+    ${tr.html}`;
+  const manual = editable && !po.pr_id;
+  const calc = ()=>{ const s=L.reduce((a,l)=>a+Math.round(num(l.qty)*num(l.unit_price)*100)/100,0); const v=$("#oVat")?.value||po.vat_type;
+    let sub=s,vat=0,tot=s; if(v==="VAT-EXCLUSIVE"){vat=Math.round(s*12)/100;tot=s+vat;} else if(v==="VAT-INCLUSIVE"){vat=Math.round(s*12/112*100)/100;sub=s-vat;}
+    $("#tSub").textContent=money(sub); $("#tVat").textContent=money(vat); $("#tTot").textContent=money(tot); };
+  const draw = ()=>{
+    $("#poLines tbody").innerHTML = L.map((l,i)=>editable?`<tr data-i="${i}"><td>${i+1}</td>
+      <td>${manual?`<input class="inp li-item" list="dlItems" value="${esc(l.description?((S.items.find(x=>x.id===l.item_id)?.code||"")+" — "+l.description):"")}">`:esc(l.description)}</td><td>${esc(l.uom)}</td>
+      <td class="num"><input class="inp right li-qty" value="${l.qty}" style="width:90px"></td><td class="num"><input class="inp right li-pr" value="${l.unit_price}" style="width:110px"></td>
+      <td class="num li-amt">${money(num(l.qty)*num(l.unit_price))}</td><td class="num">${qtyf(l.qty_received)}</td>${manual?`<td><button class="btn sm warn li-del">✕</button></td>`:""}</tr>`
+      : `<tr><td>${i+1}</td><td>${esc(l.description)}</td><td>${esc(l.uom)}</td><td class="num">${qtyf(l.qty)}</td><td class="num">${money(l.unit_price)}</td><td class="num">${money(l.amount)}</td><td class="num">${qtyf(l.qty_received)}</td></tr>`).join("") || `<tr><td colspan="8" class="empty">No lines.</td></tr>`;
+    calc();
+  };
+  draw();
+  if(editable){
+    const tb=$("#poLines tbody");
+    tb.addEventListener("input",e=>{ const tr=e.target.closest("tr"); if(!tr) return; const l=L[+tr.dataset.i];
+      if(e.target.classList.contains("li-qty")) l.qty=e.target.value; if(e.target.classList.contains("li-pr")) l.unit_price=e.target.value;
+      $(".li-amt",tr).textContent=money(num(l.qty)*num(l.unit_price)); calc(); });
+    tb.addEventListener("change",e=>{ if(!e.target.classList.contains("li-item")) return; const l=L[+e.target.closest("tr").dataset.i]; const it=itemFromText(e.target.value);
+      if(it){ l.item_id=it.id; l.description=it.description; l.uom=it.uom; if(!num(l.unit_price)) l.unit_price=it.last_price||0; } else { l.item_id=null; toast("Pick an item from the Item Master.","err"); } setTimeout(draw,0); });
+    tb.addEventListener("click",e=>{ if(e.target.classList.contains("li-del")){ L.splice(+e.target.closest("tr").dataset.i,1); draw(); }});
+    $("#oVat").onchange=calc;
+    if($("#oAdd")) $("#oAdd").onclick=()=>{ L.push({item_id:null,description:"",uom:"PC",qty:1,unit_price:0,qty_received:0}); draw(); };
+    const save = async ()=>{
+      if(L.some(l=>!l.item_id)) throw new Error("Every line must use an item from the Item Master.");
+      if(L.some(l=>num(l.qty)<=0)) throw new Error("Quantity must be more than zero.");
+      if(po.pr_id){ const {data:prl} = await sb.from("pur_pr_lines").select("id,qty").eq("pr_id",po.pr_id); const m=Object.fromEntries((prl||[]).map(x=>[x.id,num(x.qty)]));
+        const over=L.find(l=>l.pr_line_id && num(l.qty)>m[l.pr_line_id]); if(over) throw new Error(`Qty for "${over.description}" is more than the PR qty (${m[over.pr_line_id]}).`); }
+      chk(await sb.from("pur_purchase_orders").update({po_date:$("#oDate").value||today(), delivery_date:$("#oDel8").value||null, payment_terms:$("#oTerms").value, vat_type:$("#oVat").value, delivery_address:$("#oAddr").value, remarks:$("#oRem").value}).eq("id",id));
+      if(manual){
+        chk(await sb.from("pur_po_lines").delete().eq("po_id",id));
+        if(L.length) chk(await sb.from("pur_po_lines").insert(L.map((l,i)=>({po_id:id,line_no:i+1,item_id:l.item_id,description:l.description,uom:l.uom,qty:num(l.qty),unit_price:num(l.unit_price)}))));
+      } else {
+        for(const l of L) chk(await sb.from("pur_po_lines").update({qty:num(l.qty),unit_price:num(l.unit_price)}).eq("id",l.id));
+      }
+      return true;
+    };
+    $("#oSave").onclick = async()=>{ await run(save,"Saved."); route(); };
+    $("#oSubmit").onclick = async()=>{ if(!L.length) return toast("Add at least one line.","err"); const ok=await run(save); if(!ok) return; try{ await rpc("pur_submit",{p_doc_type:"PO",p_id:id}); toast("PO submitted for approval.","ok"); }catch(e){ toast(errMsg(e),"err"); } route(); };
+    if($("#oDel")) $("#oDel").onclick = async()=>{ if(!await confirmBox("Delete PO","Delete this draft PO?")) return; await run(async()=>chk(await sb.from("pur_purchase_orders").delete().eq("id",id)),"Deleted."); go("po"); };
+  }
+  if($("#oSent")) $("#oSent").onclick = async()=>{ await run(()=>rpc("pur_mark_sent",{p_po:id}),"Marked as sent."); route(); };
+  if($("#oCancel")) $("#oCancel").onclick = async()=>{ const r=await ask("Cancel PO","Reason for cancelling"); if(!r) return; await run(()=>rpc("pur_cancel",{p_doc_type:"PO",p_id:id,p_reason:r}),"PO cancelled."); route(); };
+  if($("#oRecv")) $("#oRecv").onclick = ()=>receiveForm(po, lines);
+  $("#oPrint").onclick = ()=>printPO(po, lines, tr.approvals);
+  wireApprove(myAppr);
+}
+
+// =====================================================================
+// RECEIVING
+// =====================================================================
+function receiveForm(po, lines){
+  const open = lines.filter(l=>num(l.qty_received)<num(l.qty));
+  modal({title:"Receive delivery — "+po.po_no, wide:true,
+    body:`<div class="grid" style="margin-bottom:12px">
+      <div class="fld"><label>Date received</label><input type="date" id="rD" value="${today()}"></div>
+      <div class="fld"><label>DR no.</label><input id="rDR"></div>
+      <div class="fld"><label>Sales invoice no.</label><input id="rSI"></div></div>
+      <div class="tbl-wrap"><table class="t"><thead><tr><th>Item</th><th class="num">Ordered</th><th class="num">Received so far</th><th class="num">Remaining</th><th class="num">Receive now</th><th class="num">Rejected</th><th>Remarks</th></tr></thead><tbody>
+      ${open.map(l=>`<tr data-id="${l.id}"><td>${esc(l.description)} <span class="muted small">${esc(l.uom)}</span></td><td class="num">${qtyf(l.qty)}</td><td class="num">${qtyf(l.qty_received)}</td><td class="num">${qtyf(num(l.qty)-num(l.qty_received))}</td>
+        <td class="num"><input class="inp right r-q" style="width:90px" value="${num(l.qty)-num(l.qty_received)}"></td><td class="num"><input class="inp right r-x" style="width:80px" value="0"></td><td><input class="inp r-r"></td></tr>`).join("")}</tbody></table></div>
+      <div class="fld" style="margin-top:12px"><label>Remarks</label><textarea id="rRem"></textarea></div>`,
+    foot:`<button class="btn" data-close>Cancel</button><button class="btn pri" id="rOk">Save receiving report</button>`,
+    onOpen:(el,close)=>{ $("#rOk",el).onclick=async()=>{
+      const pl = $$("tbody tr",el).map(tr=>({po_line_id:tr.dataset.id, qty_received:num($(".r-q",tr).value), qty_rejected:num($(".r-x",tr).value), remarks:$(".r-r",tr).value}));
+      const rr = await run(()=>rpc("pur_receive",{p_po:po.id,p_received_date:$("#rD",el).value,p_dr_no:$("#rDR",el).value,p_invoice_no:$("#rSI",el).value,p_remarks:$("#rRem",el).value,p_lines:pl}),"Receiving report saved.");
+      if(rr){ close(); go("rr-view/"+rr); } }; }});
+}
+async function viewRRList(){
+  const {data:open} = await sb.from("pur_purchase_orders").select("id,po_no,status,delivery_date,total,company:pur_companies(code),supplier:pur_suppliers(name)").in("status",["approved","sent","partial"]).order("delivery_date",{nullsFirst:false});
+  const rows = chk(await sb.from("pur_receivings").select("*, company:pur_companies(code), po:pur_purchase_orders(po_no, supplier:pur_suppliers(name))").order("created_at",{ascending:false}).limit(300));
+  $("#view").innerHTML = `
+    <div class="card"><h3>POs awaiting delivery (${(open||[]).length})</h3>
+    ${(open||[]).length?`<div class="tbl-wrap"><table class="t"><thead><tr><th>PO No.</th><th>Company</th><th>Supplier</th><th>Delivery date</th><th class="num">Total</th><th>Status</th><th></th></tr></thead><tbody>
+    ${open.map(p=>`<tr><td><a href="#po-edit/${p.id}">${esc(p.po_no)}</a></td><td>${esc(p.company?.code)}</td><td>${esc(p.supplier?.name)}</td><td>${d8(p.delivery_date)}</td><td class="num">${money(p.total)}</td><td>${badge(p.status)}</td><td>${canReceive()?`<button class="btn sm pri" data-po="${p.id}">Receive</button>`:""}</td></tr>`).join("")}</tbody></table></div>`:`<div class="muted small">None.</div>`}</div>
+    <div class="card"><div class="toolbar"><h3 style="margin:0">Receiving reports</h3><div class="sp"></div><button class="btn sm" id="rrX">⭳ Excel</button></div>
+    ${rows.length?`<div class="tbl-wrap"><table class="t"><thead><tr><th>RR No.</th><th>Company</th><th>PO No.</th><th>Supplier</th><th>Date</th><th>DR</th><th>SI</th><th>Received by</th></tr></thead><tbody>
+    ${rows.map(r=>`<tr class="click" onclick="go('rr-view/${r.id}')"><td class="bold">${esc(r.rr_no)}</td><td>${esc(r.company?.code)}</td><td>${esc(r.po?.po_no)}</td><td>${esc(r.po?.supplier?.name)}</td><td>${d8(r.received_date)}</td><td>${esc(r.dr_no)}</td><td>${esc(r.invoice_no)}</td><td>${esc(pname(r.received_by))}</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">No receiving reports yet.</div>`}</div>`;
+  $$("[data-po]").forEach(b=>b.onclick=async()=>{ const po=chk(await sb.from("pur_purchase_orders").select(PO_SEL).eq("id",b.dataset.po).single()); const ls=chk(await sb.from("pur_po_lines").select("*").eq("po_id",po.id).order("line_no")); receiveForm(po,ls); });
+  $("#rrX").onclick=()=>exportXlsx(rows.map(r=>({RR_No:r.rr_no,Company:r.company?.code,PO_No:r.po?.po_no,Supplier:r.po?.supplier?.name,Date:r.received_date,DR:r.dr_no,SI:r.invoice_no,Received_By:pname(r.received_by),Remarks:r.remarks})),"Receiving");
+}
+async function viewRR(id){
+  const rr = chk(await sb.from("pur_receivings").select("*, company:pur_companies(*), po:pur_purchase_orders(*, supplier:pur_suppliers(*))").eq("id",id).single());
+  const lines = chk(await sb.from("pur_rr_lines").select("*, pol:pur_po_lines(description,uom,qty,unit_price)").eq("rr_id",id));
+  $("#view").innerHTML = `<div class="doc-head"><div><h3>${esc(rr.rr_no)}</h3><div class="muted small">${esc(rr.company.name)} · PO <a href="#po-edit/${rr.po_id}">${esc(rr.po.po_no)}</a> · ${esc(rr.po.supplier.name)}</div></div><div class="sp"></div><button class="btn" id="rrP">🖨 Print RR</button></div>
+    <div class="card"><div class="grid"><div><div class="small muted">Date received</div><b>${d8(rr.received_date)}</b></div><div><div class="small muted">DR no.</div><b>${esc(rr.dr_no||"—")}</b></div><div><div class="small muted">Sales invoice</div><b>${esc(rr.invoice_no||"—")}</b></div><div><div class="small muted">Received by</div><b>${esc(pname(rr.received_by))}</b></div></div>${rr.remarks?`<p class="small">${esc(rr.remarks)}</p>`:""}</div>
+    <div class="tbl-wrap"><table class="t"><thead><tr><th>Item</th><th>UOM</th><th class="num">Ordered</th><th class="num">Received</th><th class="num">Rejected</th><th>Remarks</th></tr></thead><tbody>
+    ${lines.map(l=>`<tr><td>${esc(l.pol.description)}</td><td>${esc(l.pol.uom)}</td><td class="num">${qtyf(l.pol.qty)}</td><td class="num">${qtyf(l.qty_received)}</td><td class="num">${qtyf(l.qty_rejected)}</td><td>${esc(l.remarks)}</td></tr>`).join("")}</tbody></table></div>`;
+  $("#rrP").onclick = ()=>printRR(rr, lines);
+}
+
+// =====================================================================
+// MASTER DATA (Item / Supplier) — changes approved by Module Admin
+// =====================================================================
+const MF = {
+  item:[{k:"code",l:"Item code (blank = auto)"},{k:"description",l:"Description",req:true},{k:"uom",l:"Unit of measure",req:true},{k:"category",l:"Category"},{k:"specs",l:"Specifications",ta:true},{k:"last_price",l:"Reference price",n:true}],
+  supplier:[{k:"code",l:"Supplier code (blank = auto)"},{k:"name",l:"Supplier name",req:true},{k:"tin",l:"TIN"},{k:"address",l:"Address",ta:true},{k:"contact_person",l:"Contact person"},{k:"phone",l:"Phone"},{k:"email",l:"Email"},{k:"payment_terms",l:"Payment terms"},{k:"vat_type",l:"VAT type",opt:["VAT","NON-VAT"]},{k:"category",l:"Category"}],
+};
+async function viewMaster(kind){
+  await refreshMasters();
+  const isItem = kind==="item"; const list = isItem?S.items:S.suppliers;
+  $("#topActions").innerHTML = `${isAdmin()?`<button class="btn" id="mImp">⭱ Import Excel</button>`:""}<button class="btn" id="mExp">⭳ Excel</button>
+    ${S.me.role!=="viewer"?`<button class="btn pri" id="mNew">＋ ${isAdmin()?"Add":"Request new"} ${isItem?"item":"supplier"}</button>`:""}`;
+  const {data:pend} = await sb.from("pur_master_requests").select("target_id").eq("kind",kind).eq("status","pending");
+  const pendSet = new Set((pend||[]).map(p=>p.target_id));
+  $("#view").innerHTML = `
+    <div class="note info">${isItem?"Item":"Supplier"} Master is controlled by the <b>Module Admin</b>. ${isAdmin()?"As Module Admin your changes apply immediately; requests from other users wait in <a href='#mreq'>Master Data Requests</a>.":"Your additions and changes are sent to the Module Admin for approval before they can be used."}</div>
+    <div class="filters"><input class="inp" id="mQ" placeholder="Search…" style="min-width:260px"><select class="inp" id="mSt"><option value="active">Active</option><option value="inactive">Inactive</option><option value="">All</option></select></div>
+    <div id="mTbl"></div>`;
+  const cols = isItem ? ["code","description","uom","category","last_price"] : ["code","name","tin","contact_person","phone","payment_terms","vat_type"];
+  const heads = isItem ? ["Code","Description","UOM","Category","Ref. price"] : ["Code","Name","TIN","Contact","Phone","Terms","VAT"];
+  const draw = ()=>{
+    const q=$("#mQ").value.trim().toLowerCase(), st=$("#mSt").value;
+    const rows = list.filter(r=>(!st||r.status===st) && (!q || cols.some(c=>String(r[c]??"").toLowerCase().includes(q))));
+    $("#mTbl").innerHTML = rows.length ? `<div class="tbl-wrap"><table class="t"><thead><tr>${heads.map(h=>`<th>${h}</th>`).join("")}<th>Status</th><th></th></tr></thead><tbody>
+      ${rows.slice(0,1000).map(r=>`<tr>${cols.map(c=>`<td class="${c==="last_price"?"num":""}">${c==="last_price"?money(r[c]):esc(r[c])}</td>`).join("")}<td>${badge(r.status)} ${pendSet.has(r.id)?'<span class="badge b-pending">change pending</span>':""}</td>
+        <td class="row" style="flex-wrap:nowrap">${S.me.role!=="viewer"&&!pendSet.has(r.id)?`<button class="btn sm" data-ed="${r.id}">${isAdmin()?"Edit":"Request change"}</button><button class="btn sm ${r.status==="active"?"warn":""}" data-tg="${r.id}">${r.status==="active"?"Deactivate":"Activate"}</button>`:""}</td></tr>`).join("")}
+      </tbody></table></div>${rows.length>1000?`<div class="small muted">Showing first 1000 of ${rows.length}. Refine your search.</div>`:""}` : `<div class="card empty">No records.</div>`;
+    $$("[data-ed]").forEach(b=>b.onclick=()=>masterRequestForm(kind,"update",list.find(r=>r.id===b.dataset.ed)));
+    $$("[data-tg]").forEach(b=>b.onclick=()=>{ const r=list.find(x=>x.id===b.dataset.tg); masterToggle(kind,r); });
+  };
+  $("#mQ").oninput=draw; $("#mSt").onchange=draw; draw();
+  if($("#mNew")) $("#mNew").onclick=()=>masterRequestForm(kind,"create");
+  $("#mExp").onclick=()=>exportXlsx(list.map(r=>Object.fromEntries(MF[kind].map(f=>[f.k,r[f.k]]).concat([["status",r.status]]))), isItem?"Item_Master":"Supplier_Master");
+  if($("#mImp")) $("#mImp").onclick=()=>masterImport(kind);
+}
+async function masterToggle(kind, r){
+  const action = r.status==="active" ? "deactivate" : "activate";
+  if(isAdmin()){
+    if(!await confirmBox(action==="activate"?"Activate":"Deactivate", `${action==="activate"?"Activate":"Deactivate"} <b>${esc(r.description||r.name)}</b>?`)) return;
+    await run(async()=>chk(await sb.from(kind==="item"?"pur_items":"pur_suppliers").update({status:action==="activate"?"active":"inactive"}).eq("id",r.id)),"Updated.");
+  } else {
+    const reason = await ask(`Request to ${action}`, "Reason"); if(!reason) return;
+    await run(()=>rpc("pur_master_request",{p_kind:kind,p_action:action,p_target:r.id,p_payload:{},p_reason:reason}),"Request sent to the Module Admin.");
+  }
+  route();
+}
+function masterRequestForm(kind, action, rec){
+  const f = MF[kind]; const isItem = kind==="item"; const direct = isAdmin();
+  const val = k => rec ? (rec[k]??"") : (k==="vat_type"?"VAT":k==="uom"?"PC":"");
+  modal({title:`${direct?(action==="create"?"Add":"Edit"):(action==="create"?"Request new":"Request change to")} ${isItem?"item":"supplier"}`,
+    body:`${direct?"":`<div class="note info">This request goes to the Module Admin. The ${isItem?"item":"supplier"} can be used once approved.</div>`}
+      <div class="grid">${f.map(x=>`<div class="fld" ${x.ta?'style="grid-column:1/-1"':""}><label>${esc(x.l)}${x.req?" *":""}</label>${
+        x.opt?`<select data-k="${x.k}">${x.opt.map(o=>`<option ${o===val(x.k)?"selected":""}>${o}</option>`).join("")}</select>`
+        : x.ta?`<textarea data-k="${x.k}">${esc(val(x.k))}</textarea>`
+        : `<input data-k="${x.k}" value="${esc(val(x.k))}" ${x.k==="code"&&rec?"disabled":""} ${x.n?'inputmode="decimal"':""}>`}</div>`).join("")}</div>
+      ${direct?"":`<div class="fld" style="margin-top:12px"><label>Reason / justification *</label><textarea id="mrWhy"></textarea></div>`}`,
+    foot:`<button class="btn" data-close>Cancel</button><button class="btn pri" id="mrOk">${direct?"Save":"Send request"}</button>`,
+    onOpen:(el,close)=>{ $("#mrOk",el).onclick=async()=>{
+      const p={}; $$("[data-k]",el).forEach(i=>{ if(!i.disabled) p[i.dataset.k]=i.value.trim(); });
+      if(isItem && p.uom) p.uom=p.uom.toUpperCase();
+      const miss=f.find(x=>x.req&&!p[x.k]); if(miss) return toast(miss.l+" is required.","err");
+      if(direct){
+        const tbl = isItem?"pur_items":"pur_suppliers"; if(p.last_price!==undefined) p.last_price=num(p.last_price);
+        if(action==="create"){ if(!p.code) delete p.code; await run(async()=>chk(await sb.from(tbl).insert(p)),"Saved."); }
+        else await run(async()=>chk(await sb.from(tbl).update(p).eq("id",rec.id)),"Saved.");
+      } else {
+        const why=$("#mrWhy",el).value.trim(); if(!why) return toast("Please give a reason.","err");
+        if(rec){ Object.keys(p).forEach(k=>{ if(String(rec[k]??"")===p[k]) delete p[k]; }); if(!Object.keys(p).length) return toast("Nothing was changed.","err"); }
+        const r = await run(()=>rpc("pur_master_request",{p_kind:kind,p_action:action,p_target:rec?.id||null,p_payload:p,p_reason:why}),"Request sent to the Module Admin.");
+        if(!r) return;
+      }
+      close(); await refreshMasters(); if(location.hash.startsWith("#items")||location.hash.startsWith("#suppliers")||location.hash.startsWith("#mreq")) route();
+    }; }});
+}
+function masterImport(kind){
+  const f = MF[kind];
+  modal({title:`Import ${kind==="item"?"items":"suppliers"} from Excel`, body:`<div class="note info">Columns (first row = headers): <b>${f.map(x=>x.k).join(", ")}</b>. Rows whose <b>code</b> already exists are updated; others are added (blank code = auto).</div>
+    <input type="file" id="impF" accept=".xlsx,.xls,.csv"><div id="impP" class="small muted" style="margin-top:10px"></div>
+    <div style="margin-top:10px"><button class="btn sm" id="impT">⭳ Download template</button></div>`,
+    foot:`<button class="btn" data-close>Cancel</button><button class="btn pri" id="impOk" disabled>Import</button>`,
+    onOpen:(el,close)=>{ let rows=[];
+      $("#impT",el).onclick=()=>exportXlsx([Object.fromEntries(f.map(x=>[x.k,""]))], kind+"_template");
+      $("#impF",el).onchange=async e=>{ const file=e.target.files[0]; if(!file) return; const wb=XLSX.read(await file.arrayBuffer()); rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:""});
+        rows=rows.map(r=>{ const o={}; Object.keys(r).forEach(k=>o[k.trim().toLowerCase().replace(/\s+/g,"_")]=String(r[k]).trim()); return o; }).filter(r=>kind==="item"?r.description:r.name);
+        $("#impP",el).textContent=rows.length+" valid row(s) found."; $("#impOk",el).disabled=!rows.length; };
+      $("#impOk",el).onclick=async()=>{ const tbl=kind==="item"?"pur_items":"pur_suppliers"; const list=kind==="item"?S.items:S.suppliers; let ins=[],upd=0;
+        await run(async()=>{ for(const r of rows){ const p={}; f.forEach(x=>{ if(r[x.k]!==undefined&&r[x.k]!=="") p[x.k]=x.n?num(r[x.k]):r[x.k]; }); if(p.uom) p.uom=p.uom.toUpperCase(); if(p.code) p.code=p.code.toUpperCase();
+            const ex=p.code&&list.find(x=>x.code===p.code); if(ex){ chk(await sb.from(tbl).update(p).eq("id",ex.id)); upd++; } else ins.push(p); }
+          for(let i=0;i<ins.length;i+=500) chk(await sb.from(tbl).insert(ins.slice(i,i+500))); });
+        toast(`${ins.length} added, ${upd} updated.`,"ok"); close(); route(); };
+    }});
+}
+async function viewMasterRequests(){
+  const rows = chk(await sb.from("pur_master_requests").select("*").order("requested_at",{ascending:false}).limit(300));
+  const pend = rows.filter(r=>r.status==="pending"), done = rows.filter(r=>r.status!=="pending");
+  const tgt = r => { const l = r.kind==="item"?S.items:S.suppliers; return l.find(x=>x.id===(r.target_id||r.result_id)); };
+  const title = r => { const t=tgt(r); return r.kind==="item" ? (r.payload.description || t?.description || "") : (r.payload.name || t?.name || ""); };
+  const row = r => `<tr class="click" data-r="${r.id}"><td class="bold">${esc(r.req_no)}</td><td>${r.kind==="item"?"Item":"Supplier"}</td><td>${esc(r.action)}</td><td>${esc(title(r))}</td><td>${esc(pname(r.requested_by))}</td><td>${dt(r.requested_at)}</td><td>${badge(r.status)}</td></tr>`;
+  const tbl = rs => `<div class="tbl-wrap"><table class="t"><thead><tr><th>Req No.</th><th>Type</th><th>Action</th><th>Record</th><th>Requested by</th><th>Date</th><th>Status</th></tr></thead><tbody>${rs.map(row).join("")}</tbody></table></div>`;
+  $("#view").innerHTML = `<div class="card"><h3>${isAdmin()?"Waiting for Module Admin approval":"My pending requests"} (${pend.length})</h3>${pend.length?tbl(pend):`<div class="empty">Nothing pending.</div>`}</div>
+    <div class="card"><h3>History</h3>${done.length?tbl(done):`<div class="muted small">—</div>`}</div>`;
+  $$("[data-r]").forEach(tr=>tr.onclick=()=>showMasterRequest(rows.find(r=>r.id===tr.dataset.r)));
+}
+function showMasterRequest(r){
+  const f = MF[r.kind]; const cur = (r.kind==="item"?S.items:S.suppliers).find(x=>x.id===r.target_id);
+  const showCur = r.action==="update" && cur;
+  const body = `<div class="small muted" style="margin-bottom:10px">${esc(r.req_no)} · ${esc(r.kind)} · <b>${esc(r.action)}</b> · requested by ${esc(pname(r.requested_by))} on ${dt(r.requested_at)}</div>
+    ${r.reason?`<div class="note info"><b>Reason:</b> ${esc(r.reason)}</div>`:""}
+    ${["create","update"].includes(r.action)?`<table class="t diff"><thead><tr><th>Field</th>${showCur?"<th>Current</th>":""}<th>${showCur?"Requested":"Value"}</th></tr></thead><tbody>
+      ${f.filter(x=>r.action==="create"||r.payload[x.k]!==undefined).map(x=>`<tr class="${showCur&&r.payload[x.k]!==undefined?"chg":""}"><td>${esc(x.l)}</td>${showCur?`<td>${esc(cur[x.k])}</td>`:""}<td>${esc(r.payload[x.k]??"")}</td></tr>`).join("")}</tbody></table>`
+      : `<p>${esc(r.action)} <b>${esc(cur?.description||cur?.name||"")}</b> (${esc(cur?.code||"")})</p>`}
+    ${r.status!=="pending"?`<p class="small">Status: ${badge(r.status)} ${r.reviewed_by?`by ${esc(pname(r.reviewed_by))} on ${dt(r.reviewed_at)}`:""} ${r.review_remarks?`— “${esc(r.review_remarks)}”`:""}</p>`:""}`;
+  const canReview = isAdmin() && r.status==="pending"; const canCancel = r.status==="pending" && (r.requested_by===S.user.id||isAdmin());
+  modal({title:"Master data request", wide:true, body,
+    foot:`${canCancel?'<button class="btn" id="mrC">Withdraw request</button>':""}<span style="flex:1"></span><button class="btn" data-close>Close</button>${canReview?'<button class="btn warn" id="mrRj">Reject</button><button class="btn ok" id="mrAp">Approve</button>':""}`,
+    onOpen:(el,close)=>{
+      if($("#mrAp",el)) $("#mrAp",el).onclick=async()=>{ const rem=await ask("Approve","Remarks (optional)",{required:false}); if(rem===null) return; const ok=await run(()=>rpc("pur_master_review",{p_id:r.id,p_decision:"approve",p_remarks:rem}),"Approved and applied to master data."); close(); await refreshMasters(); route(); };
+      if($("#mrRj",el)) $("#mrRj",el).onclick=async()=>{ const rem=await ask("Reject","Reason for rejecting"); if(!rem) return; await run(()=>rpc("pur_master_review",{p_id:r.id,p_decision:"reject",p_remarks:rem}),"Rejected."); close(); route(); };
+      if($("#mrC",el)) $("#mrC",el).onclick=async()=>{ await run(()=>rpc("pur_master_cancel",{p_id:r.id}),"Request withdrawn."); close(); route(); };
+    }});
+}
+
+// =====================================================================
+// SETUP (Module Admin)
+// =====================================================================
+async function viewSetup(tab){
+  if(!isAdmin()) throw new Error("Module Admin only.");
+  tab = tab || "matrix";
+  const T = (k,l)=>`<button class="btn ${tab===k?"pri":""}" onclick="go('setup/${k}')">${l}</button>`;
+  $("#view").innerHTML = `<div class="row" style="margin-bottom:14px">${T("matrix","Approval Matrix")}${T("users","Users & Access")}${T("companies","Companies")}${T("depts","Departments")}</div><div id="setupBody"></div>`;
+  await loadRefs();
+  ({matrix:setupMatrix, users:setupUsers, companies:setupCompanies, depts:setupDepts}[tab]||setupMatrix)();
+}
+async function setupMatrix(){
+  const rules = chk(await sb.from("pur_approval_rules").select("*").order("doc_type").order("step_no").order("min_amount"));
+  const active = Object.values(S.profiles).filter(p=>p.active);
+  $("#setupBody").innerHTML = `<div class="note info">Each company has its own approvers for <b>PR</b> and <b>PO</b>. A step applies when the document amount is <b>at or above</b> its minimum amount; steps run in order (1 → 2 → 3). Put two people on the same step if either one may approve.</div>
+    ${S.companies.filter(c=>c.active).map(c=>`<div class="card"><div class="toolbar"><h3 style="margin:0">${esc(c.code)} — ${esc(c.name)}</h3><div class="sp"></div><button class="btn sm" data-copy="${c.id}">Copy matrix to…</button></div>
+      <div class="grid">${["PR","PO"].map(dt_=>{ const rs=rules.filter(r=>r.company_id===c.id&&r.doc_type===dt_);
+        return `<div><div class="bold" style="margin-bottom:6px">${dt_==="PR"?"Purchase Requisition":"Purchase Order"}</div>
+        <div class="tbl-wrap"><table class="t"><thead><tr><th>Step</th><th>Name</th><th>Approver</th><th class="num">Min. amount</th><th></th></tr></thead><tbody>
+        ${rs.map(r=>`<tr><td>${r.step_no}</td><td>${esc(r.step_name)}</td><td>${esc(pname(r.approver_id))}</td><td class="num">${money(r.min_amount)}</td><td><button class="btn sm warn" data-delr="${r.id}">✕</button></td></tr>`).join("") || `<tr><td colspan="5" class="muted small">No approvers — documents cannot be submitted.</td></tr>`}
+        <tr><td><input class="inp" style="width:50px" data-n="step" value="${(Math.max(0,...rs.map(r=>r.step_no))+1)}"></td><td><input class="inp" data-n="name" placeholder="e.g. Dept Head"></td>
+          <td><select class="inp" data-n="appr"><option value="">— approver —</option>${active.map(p=>`<option value="${p.user_id}">${esc(p.full_name||p.email)}</option>`).join("")}</select></td>
+          <td><input class="inp right" style="width:110px" data-n="min" value="0"></td><td><button class="btn sm pri" data-addr="${c.id}|${dt_}">Add</button></td></tr>
+        </tbody></table></div></div>`; }).join("")}</div></div>`).join("")}`;
+  $$("[data-delr]").forEach(b=>b.onclick=async()=>{ await run(async()=>chk(await sb.from("pur_approval_rules").delete().eq("id",b.dataset.delr)),"Removed."); setupMatrix(); });
+  $$("[data-addr]").forEach(b=>b.onclick=async()=>{ const tr=b.closest("tr"); const [co,dt_]=b.dataset.addr.split("|"); const g=n=>$(`[data-n="${n}"]`,tr).value;
+    if(!g("appr")) return toast("Select an approver.","err");
+    await run(async()=>chk(await sb.from("pur_approval_rules").insert({company_id:co,doc_type:dt_,step_no:parseInt(g("step"))||1,step_name:g("name"),approver_id:g("appr"),min_amount:num(g("min"))})),"Added."); setupMatrix(); });
+  $$("[data-copy]").forEach(b=>b.onclick=()=>{ const src=b.dataset.copy;
+    modal({title:"Copy approval matrix", body:`<div class="note">Replaces the matrix of the selected companies with ${esc(comp(src).code)}'s.</div>${S.companies.filter(c=>c.id!==src&&c.active).map(c=>`<label class="chk"><input type="checkbox" value="${c.id}"> ${esc(c.code)} — ${esc(c.name)}</label>`).join("")}`,
+      foot:`<button class="btn" data-close>Cancel</button><button class="btn pri" id="cpOk">Copy</button>`,
+      onOpen:(el,close)=>{ $("#cpOk",el).onclick=async()=>{ const tg=$$("input:checked",el).map(i=>i.value); if(!tg.length) return; const srcR=rules.filter(r=>r.company_id===src);
+        await run(async()=>{ chk(await sb.from("pur_approval_rules").delete().in("company_id",tg)); const ins=tg.flatMap(t=>srcR.map(r=>({company_id:t,doc_type:r.doc_type,step_no:r.step_no,step_name:r.step_name,approver_id:r.approver_id,min_amount:r.min_amount}))); if(ins.length) chk(await sb.from("pur_approval_rules").insert(ins)); },"Matrix copied."); close(); setupMatrix(); }; }}); });
+}
+async function setupUsers(){
+  const [profs, uc] = await Promise.all([sb.from("pur_profiles").select("*").order("full_name").then(chk), sb.from("pur_user_companies").select("*").then(chk)]);
+  const cos = u => uc.filter(x=>x.user_id===u).map(x=>comp(x.company_id).code).join(", ");
+  $("#setupBody").innerHTML = `<div class="toolbar"><div class="note info" style="margin:0;flex:1">Logins are shared with the other Meatplus apps. Adding an email that already has a login just links it — no new password needed. <b>Purchasing</b> and <b>Module Admin</b> roles see all companies.</div><button class="btn pri" id="uNew">＋ Add user</button></div>
+    <div class="tbl-wrap"><table class="t"><thead><tr><th>Name</th><th>Email</th><th>Position</th><th>Role</th><th>Companies</th><th>Status</th><th></th></tr></thead><tbody>
+    ${profs.map(p=>`<tr><td class="bold">${esc(p.full_name)}</td><td>${esc(p.email)}</td><td>${esc(p.position)}</td><td>${esc(ROLE_LABEL[p.role])}</td><td>${["admin","purchasing"].includes(p.role)?"<i>All</i>":esc(cos(p.user_id)||"—")}</td><td>${badge(p.active?"active":"inactive")}</td>
+      <td><button class="btn sm" data-eu="${p.user_id}">Edit</button></td></tr>`).join("")}</tbody></table></div>
+    <div class="card small muted" style="margin-top:14px"><b>Roles:</b> Module Admin — setup, approval matrix, users, approves item/supplier master data · Purchasing — all companies, canvass, POs · Requester — creates PRs for assigned companies · Receiver — receives deliveries for assigned companies · Viewer — read only. Anyone listed in the Approval Matrix can approve.</div>`;
+  $("#uNew").onclick = ()=>userForm();
+  $$("[data-eu]").forEach(b=>b.onclick=()=>userForm(profs.find(p=>p.user_id===b.dataset.eu), uc.filter(x=>x.user_id===b.dataset.eu).map(x=>x.company_id)));
+}
+function userForm(p, mine=[]){
+  const isNew = !p;
+  modal({title:isNew?"Add user":"Edit user", body:`<div class="grid">
+      <div class="fld"><label>Email *</label><input id="uE" type="email" value="${esc(p?.email||"")}" ${isNew?"":"disabled"}></div>
+      <div class="fld"><label>Full name *</label><input id="uN" value="${esc(p?.full_name||"")}"></div>
+      <div class="fld"><label>Position</label><input id="uP" value="${esc(p?.position||"")}"></div>
+      <div class="fld"><label>Role</label><select id="uR">${Object.entries(ROLE_LABEL).map(([k,v])=>`<option value="${k}" ${p?.role===k?"selected":""}>${v}</option>`).join("")}</select></div>
+      ${isNew?`<div class="fld"><label>Temporary password (only if no login yet)</label><input id="uPw" type="text" placeholder="min. 8 characters"></div>`:`<div class="fld"><label>Status</label><select id="uA"><option value="1" ${p.active?"selected":""}>Active</option><option value="0" ${!p.active?"selected":""}>Inactive</option></select></div>`}
+    </div>
+    <div class="fld" style="margin-top:12px"><label>Companies (for Requester / Receiver / Viewer)</label><div class="grid" style="gap:4px">${S.companies.map(c=>`<label class="chk"><input type="checkbox" class="uC" value="${c.id}" ${mine.includes(c.id)?"checked":""}> ${esc(c.code)} — ${esc(c.name)}</label>`).join("")}</div></div>`,
+    foot:`${isNew?"":'<button class="btn" id="uRst">Reset password</button><span style="flex:1"></span>'}<button class="btn" data-close>Cancel</button><button class="btn pri" id="uOk">Save</button>`,
+    onOpen:(el,close)=>{
+      $("#uOk",el).onclick=async()=>{
+        const cids=$$(".uC:checked",el).map(i=>i.value);
+        if(isNew){
+          const {data:{session}} = await sb.auth.getSession();
+          const res = await run(async()=>{ const r=await fetch(FN_ADMIN,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token,apikey:SUPABASE_KEY},body:JSON.stringify({action:"create",email:$("#uE",el).value,full_name:$("#uN",el).value,position:$("#uP",el).value,role:$("#uR",el).value,password:$("#uPw",el).value,company_ids:cids})}); const j=await r.json(); if(!r.ok) throw new Error(j.error||"Failed"); return j; });
+          if(!res) return; toast(res.linked?"Existing login linked to the Purchasing System.":"User created. They must change the password at first sign-in.","ok");
+        } else {
+          await run(async()=>{ chk(await sb.from("pur_profiles").update({full_name:$("#uN",el).value.trim(),position:$("#uP",el).value.trim(),role:$("#uR",el).value,active:$("#uA",el).value==="1"}).eq("user_id",p.user_id));
+            const add=cids.filter(c=>!mine.includes(c)), del=mine.filter(c=>!cids.includes(c));
+            if(del.length) chk(await sb.from("pur_user_companies").delete().eq("user_id",p.user_id).in("company_id",del));
+            if(add.length) chk(await sb.from("pur_user_companies").insert(add.map(c=>({user_id:p.user_id,company_id:c})))); },"Saved.");
+        }
+        close(); await loadRefs(); setupUsers();
+      };
+      if($("#uRst",el)) $("#uRst",el).onclick=async()=>{ const pw=await ask("Reset password","New temporary password (min. 8). Note: this login is shared with the other Meatplus apps."); if(!pw) return;
+        const {data:{session}} = await sb.auth.getSession();
+        await run(async()=>{ const r=await fetch(FN_ADMIN,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token,apikey:SUPABASE_KEY},body:JSON.stringify({action:"reset",user_id:p.user_id,password:pw})}); const j=await r.json(); if(!r.ok) throw new Error(j.error||"Failed"); },"Password reset. User must change it at next sign-in."); };
+    }});
+}
+async function setupCompanies(){
+  $("#setupBody").innerHTML = `<div class="tbl-wrap"><table class="t"><thead><tr><th>Logo</th><th>Code</th><th>Name</th><th>TIN</th><th>Address</th><th>Status</th><th></th></tr></thead><tbody>
+    ${S.companies.map(c=>`<tr><td>${c.logo?`<img src="${esc(c.logo)}" style="height:28px">`:""}</td><td class="bold">${esc(c.code)}</td><td>${esc(c.name)}</td><td>${esc(c.tin)}</td><td class="small">${esc(c.address)}</td><td>${badge(c.active?"active":"inactive")}</td><td><button class="btn sm" data-ec="${c.id}">Edit</button></td></tr>`).join("")}</tbody></table></div>
+    <div style="margin-top:10px"><button class="btn" id="cNew">＋ Add company</button></div>`;
+  const form = c => modal({title:c?"Edit company":"Add company", body:`<div class="grid">
+      <div class="fld"><label>Code *</label><input id="cC" value="${esc(c?.code||"")}" ${c?"disabled":""}></div><div class="fld"><label>Name *</label><input id="cN" value="${esc(c?.name||"")}"></div>
+      <div class="fld"><label>TIN</label><input id="cT" value="${esc(c?.tin||"")}"></div><div class="fld"><label>Status</label><select id="cA"><option value="1">Active</option><option value="0" ${c&&!c.active?"selected":""}>Inactive</option></select></div></div>
+      <div class="fld" style="margin-top:10px"><label>Address (printed on PO / default delivery address)</label><textarea id="cAd">${esc(c?.address||"")}</textarea></div>
+      <div class="fld" style="margin-top:10px"><label>Logo (PNG/JPG, printed on forms)</label><input type="file" id="cL" accept="image/png,image/jpeg"></div>`,
+    foot:`<button class="btn" data-close>Cancel</button><button class="btn pri" id="cOk">Save</button>`,
+    onOpen:(el,close)=>{ let logo=c?.logo||null;
+      $("#cL",el).onchange=e=>{ const f=e.target.files[0]; if(!f) return; if(f.size>300000) return toast("Logo must be under 300 KB.","err"); const r=new FileReader(); r.onload=()=>logo=r.result; r.readAsDataURL(f); };
+      $("#cOk",el).onclick=async()=>{ const row={name:$("#cN",el).value.trim(),tin:$("#cT",el).value.trim(),address:$("#cAd",el).value.trim(),active:$("#cA",el).value==="1",logo};
+        if(!row.name) return toast("Name is required.","err");
+        await run(async()=>{ if(c) chk(await sb.from("pur_companies").update(row).eq("id",c.id)); else chk(await sb.from("pur_companies").insert({...row,code:$("#cC",el).value.trim().toUpperCase()})); },"Saved.");
+        close(); await loadRefs(); setupCompanies(); }; }});
+  $$("[data-ec]").forEach(b=>b.onclick=()=>form(S.companies.find(c=>c.id===b.dataset.ec)));
+  $("#cNew").onclick=()=>form(null);
+}
+async function setupDepts(){
+  $("#setupBody").innerHTML = S.companies.filter(c=>c.active).map(c=>`<div class="card"><h3>${esc(c.code)} — ${esc(c.name)}</h3><div class="row">
+    ${S.depts.filter(d=>d.company_id===c.id).map(d=>`<span class="badge ${d.active?"b-active":"b-inactive"}" style="font-size:12.5px;padding:4px 10px">${esc(d.name)} <a href="javascript:void 0" data-td="${d.id}" title="${d.active?"Deactivate":"Activate"}" style="color:inherit;margin-left:4px">${d.active?"✕":"↺"}</a></span>`).join("")}
+    <input class="inp" style="width:180px" placeholder="New department" data-nd="${c.id}"><button class="btn sm" data-ad="${c.id}">Add</button></div></div>`).join("");
+  $$("[data-ad]").forEach(b=>b.onclick=async()=>{ const i=$(`[data-nd="${b.dataset.ad}"]`); const n=i.value.trim(); if(!n) return; await run(async()=>chk(await sb.from("pur_departments").insert({company_id:b.dataset.ad,name:n})),"Added."); await loadRefs(); setupDepts(); });
+  $$("[data-td]").forEach(a=>a.onclick=async()=>{ const d=S.depts.find(x=>x.id===a.dataset.td); await run(async()=>chk(await sb.from("pur_departments").update({active:!d.active}).eq("id",d.id))); await loadRefs(); setupDepts(); });
+}
+
+// =====================================================================
+// PRINTING (jsPDF)
+// =====================================================================
+function pdfHeader(doc, co, title, docNo){
+  const W = doc.internal.pageSize.getWidth();
+  let x = 14;
+  if(co.logo){ try{ const fmt = co.logo.includes("image/jpeg")?"JPEG":"PNG"; const p=doc.getImageProperties(co.logo); const h=16, w=Math.min(40,p.width*h/p.height); doc.addImage(co.logo, fmt, 14, 10, w, h); x = 14 + w + 4; }catch(e){} }
+  doc.setFont("helvetica","bold"); doc.setFontSize(13); doc.text(co.name||"", x, 15);
+  doc.setFont("helvetica","normal"); doc.setFontSize(8.5); doc.text(doc.splitTextToSize(co.address||"", 110), x, 20);
+  if(co.tin) doc.text("TIN: "+co.tin, x, 28);
+  doc.setFont("helvetica","bold"); doc.setFontSize(15); doc.setTextColor(200,16,46); doc.text(title, W-14, 15, {align:"right"});
+  doc.setTextColor(0); doc.setFontSize(11); doc.text(docNo||"", W-14, 21, {align:"right"});
+  doc.setDrawColor(200,16,46); doc.setLineWidth(0.6); doc.line(14, 32, W-14, 32);
+  return 38;
+}
+function kv(doc, pairs, y){
+  const W = doc.internal.pageSize.getWidth(); const colW = (W-28)/2;
+  doc.setFontSize(9);
+  pairs.forEach((p,i)=>{ const cx = 14 + (i%2)*colW, cy = y + Math.floor(i/2)*5.5;
+    doc.setFont("helvetica","bold"); doc.text(p[0]+":", cx, cy); doc.setFont("helvetica","normal"); doc.text(doc.splitTextToSize(String(p[1]??""), colW-32)[0]||"", cx+30, cy); });
+  return y + Math.ceil(pairs.length/2)*5.5 + 2;
+}
+function signBlock(doc, sigs, y){
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  if(y > H-40){ doc.addPage(); y = 20; }
+  const n = Math.max(sigs.length,1), w = (W-28)/n;
+  doc.setFontSize(8.5);
+  sigs.forEach((s,i)=>{ const cx = 14 + i*w;
+    doc.setFont("helvetica","normal"); doc.text(s[0], cx, y);
+    doc.setFont("helvetica","bold"); doc.text(s[1]||"", cx, y+12);
+    doc.setLineWidth(0.2); doc.line(cx, y+13, cx+w-8, y+13);
+    doc.setFont("helvetica","normal"); doc.text(s[2]||"", cx, y+17); });
+}
+const TBL = {theme:"grid", headStyles:{fillColor:[200,16,46], fontSize:8.5}, styles:{fontSize:8.5, cellPadding:1.6}, margin:{left:14,right:14}};
+function approvedSigs(approvals){
+  const maxR = Math.max(0,...approvals.map(a=>a.round));
+  return approvals.filter(a=>a.round===maxR && a.status==="approved").map(a=>[a.step_name||("Approver "+a.step_no), pname(a.approver_id), "Approved "+d8(a.acted_at)]);
+}
+function printPR(pr, lines, approvals){
+  const {jsPDF} = window.jspdf; const doc = new jsPDF();
+  let y = pdfHeader(doc, comp(pr.company_id), "PURCHASE REQUISITION", pr.pr_no);
+  y = kv(doc, [["Department", pr.dept?.name||""],["Date", d8(pr.request_date)],["Requested by", pname(pr.requested_by)],["Date needed", d8(pr.date_needed)],["Priority", pr.priority],["Status", pr.status.toUpperCase()]], y);
+  doc.setFont("helvetica","bold"); doc.text("Purpose:", 14, y+2); doc.setFont("helvetica","normal"); const pl = doc.splitTextToSize(pr.purpose||"", 160); doc.text(pl, 30, y+2); y += 4 + pl.length*4;
+  doc.autoTable({...TBL, startY:y, head:[["#","Item code","Description","UOM","Qty","Est. unit cost","Amount","Remarks"]],
+    body: lines.map((l,i)=>[i+1, S.items.find(x=>x.id===l.item_id)?.code||"", l.description, l.uom, qtyf(l.qty), money(l.est_unit_cost), money(l.amount), l.remarks||""]),
+    foot:[["","","","","","TOTAL", money(pr.total), ""]], footStyles:{fillColor:[245,245,245], textColor:20, fontStyle:"bold"},
+    columnStyles:{4:{halign:"right"},5:{halign:"right"},6:{halign:"right"}}});
+  signBlock(doc, [["Requested by", pname(pr.requested_by), d8(pr.submitted_at||pr.request_date)], ...approvedSigs(approvals)].slice(0,4), doc.lastAutoTable.finalY + 16);
+  doc.save(pr.pr_no + ".pdf");
+}
+function printPO(po, lines, approvals){
+  const {jsPDF} = window.jspdf; const doc = new jsPDF(); const s = po.supplier;
+  let y = pdfHeader(doc, po.company, "PURCHASE ORDER", po.po_no);
+  y = kv(doc, [["Supplier", s.name],["PO date", d8(po.po_date)],["Address", s.address||""],["Delivery date", d8(po.delivery_date)],["TIN", s.tin||""],["Terms", po.payment_terms||""],["Contact", [s.contact_person,s.phone].filter(Boolean).join(" / ")],["PR ref.", po.pr?.pr_no||"—"]], y);
+  doc.setFont("helvetica","bold"); doc.text("Deliver to:", 14, y+2); doc.setFont("helvetica","normal"); const al=doc.splitTextToSize(po.delivery_address||"",160); doc.text(al, 34, y+2); y += 4 + al.length*4;
+  doc.autoTable({...TBL, startY:y, head:[["#","Description","UOM","Qty","Unit price","Amount"]],
+    body: lines.map((l,i)=>[i+1, l.description, l.uom, qtyf(l.qty), money(l.unit_price), money(l.amount)]),
+    foot:[["","","","",po.vat_type==="VAT-INCLUSIVE"?"Net of VAT":"Subtotal", money(po.subtotal)],["","","","","VAT 12%", money(po.vat_amount)],["","","","","TOTAL", money(po.total)]],
+    footStyles:{fillColor:[245,245,245], textColor:20, fontStyle:"bold"}, columnStyles:{3:{halign:"right"},4:{halign:"right"},5:{halign:"right"}}});
+  let fy = doc.lastAutoTable.finalY + 6;
+  doc.setFontSize(8.5); doc.text(`VAT: ${po.vat_type}`, 14, fy);
+  if(po.remarks){ const rl=doc.splitTextToSize("Remarks: "+po.remarks, 180); doc.text(rl, 14, fy+5); fy += rl.length*4; }
+  doc.setFontSize(7.5); doc.text(doc.splitTextToSize("Please indicate the PO number on your delivery receipt and sales invoice. Deliveries not matching this PO may be refused.",180), 14, fy+9);
+  signBlock(doc, [["Prepared by", pname(po.created_by), "Purchasing"], ...approvedSigs(approvals), ["Conforme (Supplier)", "", "Signature over printed name / date"]].slice(0,4), fy + 22);
+  doc.save(po.po_no + ".pdf");
+}
+function printRR(rr, lines){
+  const {jsPDF} = window.jspdf; const doc = new jsPDF();
+  let y = pdfHeader(doc, rr.company, "RECEIVING REPORT", rr.rr_no);
+  y = kv(doc, [["Supplier", rr.po.supplier.name],["Date received", d8(rr.received_date)],["PO no.", rr.po.po_no],["DR no.", rr.dr_no||""],["Received by", pname(rr.received_by)],["Sales invoice", rr.invoice_no||""]], y);
+  doc.autoTable({...TBL, startY:y+2, head:[["#","Description","UOM","Ordered","Received","Rejected","Remarks"]],
+    body: lines.map((l,i)=>[i+1, l.pol.description, l.pol.uom, qtyf(l.pol.qty), qtyf(l.qty_received), qtyf(l.qty_rejected), l.remarks||""]),
+    columnStyles:{3:{halign:"right"},4:{halign:"right"},5:{halign:"right"}}});
+  let fy = doc.lastAutoTable.finalY + 6;
+  if(rr.remarks){ doc.setFontSize(8.5); const rl=doc.splitTextToSize("Remarks: "+rr.remarks,180); doc.text(rl,14,fy); fy+=rl.length*4; }
+  signBlock(doc, [["Received by", pname(rr.received_by), d8(rr.received_date)],["Checked by","",""],["Delivered by (Supplier)","",""]], fy + 14);
+  doc.save(rr.rr_no + ".pdf");
+}
+function printCanvass(cv, lines, SUP, P, AW){
+  const {jsPDF} = window.jspdf; const doc = new jsPDF({orientation:"landscape"});
+  const sname = sid => S.suppliers.find(s=>s.id===sid)?.name || "?";
+  let y = pdfHeader(doc, cv.company, "ABSTRACT OF CANVASS", cv.cv_no);
+  y = kv(doc, [["PR no.", cv.pr.pr_no],["Date", d8(cv.created_at)],["Purpose", cv.pr.purpose||""],["Status", cv.status.toUpperCase()]], y);
+  const head = [["Item","Qty", ...SUP.map(s=>sname(s.supplier_id))]];
+  const body = lines.map(l=>[l.description, qtyf(l.qty)+" "+l.uom, ...SUP.map(s=>{ const v=P[s.supplier_id+"|"+l.id]; return (v!==undefined&&v!==""?money(v):"—") + (AW[l.id]===s.supplier_id?"  *":""); })]);
+  body.push(["Total quoted","", ...SUP.map(s=>money(lines.reduce((a,l)=>{ const v=P[s.supplier_id+"|"+l.id]; return a+(v!==undefined&&v!==""?num(v)*num(l.qty):0); },0)))]);
+  body.push(["Terms / lead time","", ...SUP.map(s=>[s.payment_terms,s.lead_time].filter(Boolean).join(" / "))]);
+  doc.autoTable({...TBL, startY:y+2, head, body});
+  doc.setFontSize(8); doc.text("* awarded supplier", 14, doc.lastAutoTable.finalY+5);
+  signBlock(doc, [["Canvassed by", pname(cv.created_by), "Purchasing"],["Reviewed by","",""],["Approved by","",""]], doc.lastAutoTable.finalY + 18);
+  doc.save(cv.cv_no + ".pdf");
+}
+
+// =====================================================================
+sb.auth.onAuthStateChange((ev)=>{ if(ev==="SIGNED_OUT"){ $("#app").classList.add("hide"); $("#login").classList.remove("hide"); } });
+boot();
+</script>
+</body>
+</html>
