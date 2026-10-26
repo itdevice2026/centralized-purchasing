@@ -138,7 +138,13 @@ table.t td.bold,table.t td.nw{white-space:nowrap}
 .cv-grid td,.cv-grid th{text-align:center}
 .cv-grid td:first-child,.cv-grid th:first-child{text-align:left}
 .cv-grid .low{background:#f0fdf4}
-.chk{display:flex;align-items:center;gap:6px;font-size:13px}
+.chk,.fld label.chk{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink);cursor:pointer}
+.chk input[type=checkbox],.chk input[type=radio],.fld .chk input[type=checkbox]{width:16px;height:16px;flex:0 0 16px;margin:0;padding:0;accent-color:var(--red)}
+.co-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:6px;margin-top:4px}
+.co-opt{border:1px solid var(--line);border-radius:7px;padding:8px 10px;align-items:flex-start!important}
+.co-opt:hover{background:#fafafa}.co-opt input{margin-top:2px!important}
+.co-opt b{display:block;font-size:13px}.co-opt small{display:block;color:var(--muted);font-size:11.5px;line-height:1.3}
+.co-opt:has(input:checked){border-color:#fca5a5;background:#fff5f6}
 @media (max-width:860px){
   .side{position:fixed;left:-240px;z-index:40;transition:left .2s}
   .side.open{left:0}
@@ -1243,15 +1249,24 @@ function userForm(p, mine=[], preset){
       <div class="fld"><label>Email *</label><input id="uE" type="email" value="${esc(p?.email||"")}" ${isNew?"":"disabled"}></div>
       <div class="fld"><label>Full name *</label><input id="uN" value="${esc(p?.full_name||"")}"></div>
       <div class="fld"><label>Position</label><input id="uP" value="${esc(p?.position||"")}"></div>
-      <div class="fld"><label>Role</label><select id="uR">${Object.entries(ROLE_LABEL).map(([k,v])=>`<option value="${k}" ${p?.role===k?"selected":""}>${v}</option>`).join("")}</select></div>
+      <div class="fld"><label>Role</label><select id="uR">${Object.entries(ROLE_LABEL).map(([k,v])=>`<option value="${k}" ${(p?.role||"requester")===k?"selected":""}>${v}</option>`).join("")}</select></div>
       <div class="fld"><label>Module access</label><select id="uM">${[["Both","Trade + Non-Trade"],["Trade","Trade only"],["Non-Trade","Non-Trade only"]].map(([k,v])=>`<option value="${k}" ${(preset||p?.module_access||"Both")===k?"selected":""}>${v}</option>`).join("")}</select></div>
       ${isNew?`<div class="fld"><label>Temporary password (only if no login yet)</label><input id="uPw" type="text" placeholder="min. 8 characters"></div>`:`<div class="fld"><label>Status</label><select id="uA"><option value="1" ${p.active?"selected":""}>Active</option><option value="0" ${!p.active?"selected":""}>Inactive</option></select></div>`}
     </div>
-    <div class="fld" style="margin-top:12px"><label>Companies (for Requester / Receiver / Viewer)</label><div class="grid" style="gap:4px">${S.companies.map(c=>`<label class="chk"><input type="checkbox" class="uC" value="${c.id}" ${mine.includes(c.id)?"checked":""}> ${esc(c.code)} — ${esc(c.name)}</label>`).join("")}</div></div>`,
+    <div class="fld" style="margin-top:14px" id="uCoWrap">
+      <div class="row" style="justify-content:space-between"><label style="margin:0">Companies</label><span class="small"><a href="javascript:void 0" id="uCoAll">Select all</a> · <a href="javascript:void 0" id="uCoNone">Clear</a></span></div>
+      <div class="small muted" style="margin:2px 0 4px">Which companies this user can create PRs, receive deliveries or view for.</div>
+      <div class="co-list">${S.companies.map(c=>`<label class="chk co-opt"><input type="checkbox" class="uC" value="${c.id}" ${mine.includes(c.id)?"checked":""}><span><b>${esc(c.code)}</b><small>${esc(c.name)}</small></span></label>`).join("")}</div></div>
+    <div class="note info" id="uCoAllNote" style="margin:14px 0 0">This role works across <b>all companies</b> — no company selection needed.</div>`,
     foot:`${isNew?"":'<button class="btn" id="uRst">Reset password</button><span style="flex:1"></span>'}<button class="btn" data-close>Cancel</button><button class="btn pri" id="uOk">Save</button>`,
     onOpen:(el,close)=>{
+      const coRole = ()=>{ const all=["admin","purchasing","executive","accounting"].includes($("#uR",el).value); $("#uCoWrap",el).classList.toggle("hide",all); $("#uCoAllNote",el).classList.toggle("hide",!all); };
+      $("#uR",el).onchange = coRole; coRole();
+      $("#uCoAll",el).onclick = ()=>$$(".uC",el).forEach(c=>c.checked=true);
+      $("#uCoNone",el).onclick = ()=>$$(".uC",el).forEach(c=>c.checked=false);
       $("#uOk",el).onclick=async()=>{
         const cids=$$(".uC:checked",el).map(i=>i.value);
+        if(!["admin","purchasing","executive","accounting"].includes($("#uR",el).value) && !cids.length) return toast("Select at least one company for this user.","err");
         if(isNew){
           const {data:{session}} = await sb.auth.getSession();
           const res = await run(async()=>{ const r=await fetch(FN_ADMIN,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token,apikey:SUPABASE_KEY},body:JSON.stringify({action:"create",email:$("#uE",el).value,full_name:$("#uN",el).value,position:$("#uP",el).value,role:$("#uR",el).value,password:$("#uPw",el).value,company_ids:cids})}); const j=await r.json(); if(!r.ok) throw new Error(j.error||"Failed"); return j; });
