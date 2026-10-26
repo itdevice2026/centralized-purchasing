@@ -224,6 +224,7 @@ function setNav(k){ S.navKey = k; renderNav(); }
 const isAdmin = () => S.me?.role === "admin";
 const isPurch = () => ["admin","purchasing"].includes(S.me?.role);
 const isExec = () => ["admin","executive"].includes(S.me?.role);
+const isPresident = () => S.me?.role === "executive";
 const canPay = () => ["admin","purchasing","accounting"].includes(S.me?.role);
 const canRequest = () => ["admin","purchasing","requester"].includes(S.me?.role);
 const canReceive = () => ["admin","purchasing","receiver"].includes(S.me?.role);
@@ -369,6 +370,7 @@ function renderNav(){
     ${isPurch()?a("canvass/"+m,"Canvass / RFQ","⚖"):""}
     ${a("po/"+m,"Purchase Orders","📄")}
     ${a("rr/"+m,"Receiving","📦")}`; };
+  if(isPresident()){ $("#nav").innerHTML = a("exec","Executive Dashboard","📊"); return; }
   $("#nav").innerHTML = `
     ${a("dashboard","Dashboard","▦")}
     ${isExec()?a("exec","Executive Dashboard","📊"):""}
@@ -381,7 +383,8 @@ function renderNav(){
     ${isAdmin()?`<div class="grp">Module Admin</div>${a("musers","Module Users","👥")}${a("setup","Setup","⚙")}`:""}`;
 }
 async function route(){
-  const [r, id] = (location.hash.slice(1)||(S.me.role==="executive"?"exec":"dashboard")).split("/");
+  let [r, id] = (location.hash.slice(1)||(S.me.role==="executive"?"exec":"dashboard")).split("/");
+  if(isPresident() && r!=="exec"){ r="exec"; id=undefined; if(location.hash!=="#exec") history.replaceState(null,"","#exec"); }
   const R = ROUTES[r] || ROUTES.dashboard;
   $("#pageTitle").textContent = R.t; $("#topActions").innerHTML = "";
   $("#side").classList.remove("open");
@@ -1143,26 +1146,28 @@ async function viewExecLoad(){
       <div class="ex-meter" title="Paid ${paidPct}%"><div style="width:${Math.min(100,paidPct)}%;background:${EX_COLORS[t]}"></div></div>
       <div class="small muted" style="margin-top:4px">Paid ${paidPct}% of ${t} purchases in the period</div></div>`; };
   const P = d.purchases||[];
+  const TY = myTypes();
+  const link = (route, id) => isPresident() ? "" : ` class="click" onclick="go('${route}/${id}')"`;
   $("#exBody").innerHTML = `
     <div class="ex-hero card">
-      <div><div class="ex-l">Total purchases (Trade + Non-Trade)</div><div class="ex-big">${peso(tot("po_amount"))}</div>
+      <div><div class="ex-l">Total purchases (${TY.join(" + ")})</div><div class="ex-big">${peso(tot("po_amount"))}</div>
         <div class="small muted">${d8(st.from)} – ${d8(st.to)} · ${st.co?esc(comp(st.co).name):"All companies"} · approved POs, VAT-inclusive totals</div></div>
-      <div class="ex-split">${PTYPES.map(t=>`<div><span class="ex-dot" style="background:${EX_COLORS[t]}"></span>${t}<b>${peso(K[t]?.po_amount)}</b><span class="muted small">${tot("po_amount")>0?Math.round(100*Number(K[t]?.po_amount||0)/tot("po_amount")):0}%</span></div>`).join("")}</div>
+      <div class="ex-split">${TY.map(t=>`<div><span class="ex-dot" style="background:${EX_COLORS[t]}"></span>${t}<b>${peso(K[t]?.po_amount)}</b><span class="muted small">${tot("po_amount")>0?Math.round(100*Number(K[t]?.po_amount||0)/tot("po_amount")):0}%</span></div>`).join("")}</div>
       <div class="ex-split">${tile("Paid", peso(tot("paid_amount")))}${tile("Unpaid", peso(tot("unpaid_amount")), "", tot("unpaid_amount")>0?"ex-warn":"")}</div>
     </div>
-    <div class="ex-grid2">${PTYPES.map(modCard).join("")}</div>
+    <div class="ex-grid2">${TY.map(modCard).join("")}</div>
     <div class="ex-grid2">
       <div class="card"><h3>Monthly purchases — last 12 months</h3><div class="ex-chart"><canvas id="exMonthly"></canvas></div></div>
       <div class="card"><h3>Purchases by company</h3><div class="ex-chart"><canvas id="exCompany"></canvas></div></div>
     </div>
     <div class="card"><div class="toolbar"><h3 style="margin:0">Purchases — amount, status &amp; payment (${P.length})</h3><div class="sp"></div>
-      <select class="inp" id="exTab" style="width:auto"><option value="">Trade &amp; Non-Trade</option>${PTYPES.map(t=>`<option ${S.exState.tab===t?"selected":""}>${t}</option>`).join("")}</select>
+      <select class="inp" id="exTab" style="width:auto">${TY.length>1?`<option value="">Trade &amp; Non-Trade</option>`:""}${TY.map(t=>`<option ${S.exState.tab===t?"selected":""}>${t}</option>`).join("")}</select>
       <select class="inp" id="exPay" style="width:auto"><option value="">All payment status</option><option value="unpaid">Unpaid</option><option value="partial">Partially paid</option><option value="paid">Paid</option></select></div>
       <div id="exPurch"></div></div>
     <div style="display:grid;gap:16px">
       <div class="card" style="margin:0"><h3>Waiting for approval (${(d.pending||[]).length})</h3>${(d.pending||[]).length?`<div class="tbl-wrap"><table class="t"><thead><tr><th>Doc</th><th>Type</th><th>Company</th><th class="num">Amount</th><th class="num">Days</th><th>Waiting on</th></tr></thead><tbody>
-        ${d.pending.map(x=>`<tr class="click" onclick="go('${x.doc==="PR"?"pr-edit":"po-edit"}/${x.id}')"><td class="bold">${esc(x.no)}</td><td>${ptype(x.type)}</td><td>${esc(x.company)}</td><td class="num">${money(x.amount)}</td><td class="num">${x.days>=3?`<b style="color:var(--red)">${x.days}</b>`:x.days}</td><td class="small">${esc(x.waiting_on||"—")}</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">Nothing waiting for approval.</div>`}</div>
-      <div class="card" style="margin:0"><h3>Top suppliers in the period</h3>${PTYPES.map(t=>{ const rows=(d.top_suppliers||[]).filter(x=>x.type===t).sort((a,b)=>b.amount-a.amount);
+        ${d.pending.map(x=>`<tr${link(x.doc==="PR"?"pr-edit":"po-edit", x.id)}><td class="bold">${esc(x.no)}</td><td>${ptype(x.type)}</td><td>${esc(x.company)}</td><td class="num">${money(x.amount)}</td><td class="num">${x.days>=3?`<b style="color:var(--red)">${x.days}</b>`:x.days}</td><td class="small">${esc(x.waiting_on||"—")}</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">Nothing waiting for approval.</div>`}</div>
+      <div class="card" style="margin:0"><h3>Top suppliers in the period</h3>${TY.map(t=>{ const rows=(d.top_suppliers||[]).filter(x=>x.type===t).sort((a,b)=>b.amount-a.amount);
         return `<div class="mod-head" style="margin-top:6px">${ptype(t)}</div>${rows.length?`<table class="t"><tbody>${rows.map((x,i)=>`<tr><td style="width:24px" class="muted">${i+1}</td><td>${esc(x.name)}</td><td class="num muted small">${x.po_count} PO</td><td class="num bold">${money(x.amount)}</td></tr>`).join("")}</tbody></table>`:`<div class="muted small">No purchases.</div>`}`; }).join("")}</div>
     </div>`;
   // purchases table
@@ -1170,7 +1175,7 @@ async function viewExecLoad(){
     const rows = P.filter(x=>(!t||x.type===t) && (!py || (PAYLIVE.includes(x.status) && x.payment_status===py)));
     const sum = f => rows.reduce((a,x)=>a+Number(x[f]||0),0);
     $("#exPurch").innerHTML = rows.length?`<div class="tbl-wrap" style="max-height:520px;overflow:auto"><table class="t"><thead><tr><th>PO No.</th><th>Type</th><th>Company</th><th>Supplier</th><th>PO date</th><th class="num">Amount</th><th>PO status</th><th>Payment</th><th class="num">Paid</th><th class="num">Balance</th><th>Date of payment</th></tr></thead><tbody>
-      ${rows.map(x=>`<tr class="click" onclick="go('po-edit/${x.id}')"><td class="bold">${esc(x.po_no)}</td><td>${ptype(x.type)}</td><td>${esc(x.company)}</td><td>${esc(x.supplier)}</td><td class="nw">${d8(x.po_date)}</td><td class="num">${money(x.amount)}</td><td>${badge(x.status)}</td><td class="nw">${payBadge(x)}</td><td class="num">${money(x.amount_paid)}</td><td class="num">${money(x.balance)}</td><td class="nw">${x.last_payment_date?d8(x.last_payment_date):'<span class="muted small">—</span>'}</td></tr>`).join("")}</tbody>
+      ${rows.map(x=>`<tr${link("po-edit", x.id)}><td class="bold">${esc(x.po_no)}</td><td>${ptype(x.type)}</td><td>${esc(x.company)}</td><td>${esc(x.supplier)}</td><td class="nw">${d8(x.po_date)}</td><td class="num">${money(x.amount)}</td><td>${badge(x.status)}</td><td class="nw">${payBadge(x)}</td><td class="num">${money(x.amount_paid)}</td><td class="num">${money(x.balance)}</td><td class="nw">${x.last_payment_date?d8(x.last_payment_date):'<span class="muted small">—</span>'}</td></tr>`).join("")}</tbody>
       <tfoot><tr><td colspan="5" class="right">Total (${rows.length})</td><td class="num">${money(sum("amount"))}</td><td colspan="2"></td><td class="num">${money(sum("amount_paid"))}</td><td class="num">${money(sum("balance"))}</td><td></td></tr></tfoot></table></div>`:`<div class="empty">No purchases in this period.</div>`; };
   $("#exTab").onchange = drawP; $("#exPay").onchange = drawP; if(S.exState.pay) $("#exPay").value=S.exState.pay; drawP();
   // charts
@@ -1180,7 +1185,7 @@ async function viewExecLoad(){
     const tip = {callbacks:{label:c=>`${c.dataset.label}: ${peso(c.parsed.y ?? c.parsed.x)}`}};
     const months = [...new Set((d.monthly||[]).map(x=>x.month))];
     const mlabel = m => new Date(m+"-01T00:00:00").toLocaleDateString("en-PH",{month:"short",year:"2-digit"});
-    const ds = (rows, key, labels) => PTYPES.map(t=>({label:t, data:labels.map(l=>Number((rows.find(x=>x[key]===l&&x.type===t)||{}).amount||0)),
+    const ds = (rows, key, labels) => TY.map(t=>({label:t, data:labels.map(l=>Number((rows.find(x=>x[key]===l&&x.type===t)||{}).amount||0)),
       backgroundColor:EX_COLORS[t], borderRadius:4, borderSkipped:"start", maxBarThickness:28, borderColor:"#fff", borderWidth:{left:1,right:1,top:0,bottom:0}}));
     S.exCharts.push(new Chart($("#exMonthly"), {type:"bar", data:{labels:months.map(mlabel), datasets:ds(d.monthly||[], "month", months)},
       options:{maintainAspectRatio:false, interaction:{mode:"index",intersect:false}, plugins:{legend:{position:"top",align:"end",labels:{boxWidth:10,boxHeight:10}}, tooltip:tip},

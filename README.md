@@ -20,7 +20,7 @@ Trade (goods for resale / production) and Non-Trade (supplies, services, assets)
 5. **Receiving** — receiver records deliveries against the PO (partial deliveries allowed). PO becomes *partial* / *received*; the PR closes when all its POs are received.
 
 ## Executive Dashboard (President)
-Menu **Executive Dashboard** (role *President / Executive* or Module Admin). Read-only, all companies, both modules:
+Menu **Executive Dashboard** (role *President / Executive* or Module Admin). The President sees **only this dashboard** (no other menus, no direct document access — enforced in the database) and **only the module(s) assigned** in Module Users (Trade, Non-Trade or both):
 - Period (this month, last month, quarter, YTD, last 12 months, custom) and company filters; Excel export.
 - Trade vs Non-Trade: purchase amount, paid, unpaid balance, payments made in the period, awaiting approval, open for delivery.
 - Monthly purchases (12 months) and purchases by company, Trade vs Non-Trade.
@@ -41,7 +41,7 @@ Item Master and Supplier Master are controlled by the **Module Admin**. Other us
 | Requester | PRs for assigned companies |
 | Receiver | Receiving for assigned companies |
 | Viewer | Read only for assigned companies |
-| President / Executive | Executive Dashboard; read-only view of all companies and both modules |
+| President / Executive | Executive Dashboard only, limited to the assigned module(s) |
 | Accounting | All companies; records and voids payments on POs |
 
 Anyone listed in the Approval Matrix can approve, whatever their role.
