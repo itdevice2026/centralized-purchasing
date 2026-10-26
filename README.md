@@ -36,6 +36,13 @@ Accounting / Purchasing record payments on approved POs (date of payment, amount
 ## Master data control
 Item Master and Supplier Master are controlled by the **Module Admin**. Other users submit *Master Data Requests* (new / change / deactivate / activate). The Module Admin approves or rejects; approved requests are applied automatically. Only active (approved) items and suppliers can be used on PRs, canvasses and POs.
 
+## Item and supplier codes
+Items follow the company item list: **Item Code · Item Group · Item Description · Brand · UOM · Status**.
+- **Trade** Item Codes and Supplier Codes are **input by Accounting** (manual, no automatic numbering). A new Trade item/supplier request waits in *Master Data Requests* until Accounting enters the code; only then can the Module Admin approve it. Accounting can also correct a Trade code with the **Code** button on the master list.
+- **Non-Trade** codes stay automatic (ITM-N- / SUP-N-) unless the Module Admin types one.
+
+Loaded 26 Oct 2026 from *Item_Data_-_Updated_1.xlsx* (sheet Item Master Data, TRADE/RETAIL/FG table): 1,464 Trade items with their codes, groups, brands and status (migration 025). Blank UOMs (meat and chicken lines) were set to KG. The Non-Trade packaging items were aligned to Item Group "Packaging Supplies", Brand GEN.
+
 ## Supplier price list
 Each item is linked to the suppliers that sell it, with a price (`pur_supplier_items`, maintained by the Module Admin from the **Items supplied** / **Suppliers / best price** column of either master). On a PR, picking an item suggests the **cheapest** listed supplier and its price. In *PO from PR*, each item's supplier list shows prices with the cheapest first, and **Cheapest per item** fills them all in. POs created from PRs use the chosen supplier's list price.
 
