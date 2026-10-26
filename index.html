@@ -153,6 +153,9 @@ table.t td.bold,table.t td.nw{white-space:nowrap}
   .topbar{padding:10px 16px}
 }
 @media print{.side,.topbar{display:none}}
+a[data-pl]{color:#2a78d6;cursor:pointer;text-decoration:underline}
+.pl-grid{display:grid;grid-template-columns:2.2fr 1fr 1.3fr 1.3fr 1.4fr auto;gap:10px;align-items:end}
+@media(max-width:800px){.pl-grid{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
@@ -300,22 +303,28 @@ async function boot(){
   route();
 }
 async function loadRefs(){
-  const [c, uc, d, p, it, su] = await Promise.all([
+  const [c, uc, d, p, it, su, pl] = await Promise.all([
     sb.from("pur_companies").select("*").order("code"),
     sb.from("pur_user_companies").select("company_id").eq("user_id", S.user.id),
     sb.from("pur_departments").select("*").order("name"),
     sb.from("pur_profiles").select("user_id,email,full_name,position,role,active,module_access"),
     fetchAll(()=>sb.from("pur_items").select("*").order("code")),
     fetchAll(()=>sb.from("pur_suppliers").select("*").order("name")),
+    fetchAll(()=>sb.from("pur_supplier_items").select("*")),
   ]);
   S.companies = chk(c); S.myCompanyIds = chk(uc).map(r=>r.company_id); S.depts = chk(d);
   S.profiles = Object.fromEntries(chk(p).map(r=>[r.user_id, r]));
-  S.items = it; S.suppliers = su;
+  S.items = it; S.suppliers = su; S.prices = pl||[];
 }
 async function refreshMasters(){
   S.items = await fetchAll(()=>sb.from("pur_items").select("*").order("code"));
   S.suppliers = await fetchAll(()=>sb.from("pur_suppliers").select("*").order("name"));
+  S.prices = await fetchAll(()=>sb.from("pur_supplier_items").select("*"));
 }
+// Supplier price list helpers (which supplier sells which item, at what price)
+function itemPrices(itemId){ return (S.prices||[]).filter(p=>p.item_id===itemId && p.active && S.suppliers.some(s=>s.id===p.supplier_id && s.status==="active")).sort((a,b)=>num(a.price)-num(b.price)); }
+function supPrices(supId){ return (S.prices||[]).filter(p=>p.supplier_id===supId); }
+function priceOf(supId, itemId){ return (S.prices||[]).find(p=>p.supplier_id===supId && p.item_id===itemId && p.active); }
 function renderWho(){
   $("#who").innerHTML = `<b>${esc(S.me.full_name||S.me.email)}</b><span class="small">${esc(S.me.email)}</span><br><span class="role">${esc(ROLE_LABEL[S.me.role])}</span> <span class="role">${esc(isAdmin()?"All modules":S.me.module_access==="Both"?"Trade + Non-Trade":S.me.module_access)}</span>
     <div style="margin-top:8px"><a onclick="changePassword()">Change password</a><a onclick="logout()">Sign out</a></div>`;
@@ -584,7 +593,7 @@ async function viewPR(id){
         <td><input class="inp li-qty right" value="${l.qty??""}" style="width:90px" inputmode="decimal"></td>
         <td><input class="inp li-cost right" value="${l.est_unit_cost??""}" style="width:110px" inputmode="decimal"></td>
         <td class="num li-amt">${money(num(l.qty)*num(l.est_unit_cost))}</td>
-        <td><select class="inp li-sup" style="width:170px"><option value="">— Purchasing to assign —</option>${supplierOptions(pr.purchase_type, l.supplier_id)}</select></td>
+        <td><select class="inp li-sup" style="width:170px"><option value="">— Purchasing to assign —</option>${supplierOptions(pr.purchase_type, l.supplier_id, l.item_id)}</select></td>
         <td><input class="inp li-cc" list="dlCC" value="${esc(l.cost_center||"")}" style="width:130px"></td>
         <td><input class="inp li-rem" value="${esc(l.remarks||"")}"></td>
         <td><button class="btn sm warn li-del">✕</button></td></tr>`
@@ -596,10 +605,14 @@ async function viewPR(id){
   if(editable){
     tbody.addEventListener("change", e=>{
       const tr=e.target.closest("tr"); if(!tr) return; const l=L[+tr.dataset.i];
-      if(e.target.classList.contains("li-sup")){ l.supplier_id=e.target.value||null; return; }
+      if(e.target.classList.contains("li-sup")){ l.supplier_id=e.target.value||null; const p=l.supplier_id&&priceOf(l.supplier_id,l.item_id); if(p){ l.est_unit_cost=p.price; setTimeout(draw,0); } return; }
       if(e.target.classList.contains("li-item")){
         const it = itemFromText(e.target.value, pr.purchase_type);
-        if(it){ l.item_id=it.id; l.description=it.description; l.uom=it.uom; if(!num(l.est_unit_cost)) l.est_unit_cost=it.last_price||0; }
+        if(it){ const changed=l.item_id!==it.id; l.item_id=it.id; l.description=it.description; l.uom=it.uom;
+          const best=itemPrices(it.id)[0];
+          if(changed && best){ l.supplier_id=best.supplier_id; l.est_unit_cost=best.price; }
+          else if(changed && l.supplier_id && !priceOf(l.supplier_id,it.id)) l.supplier_id=null;
+          if(!num(l.est_unit_cost)) l.est_unit_cost=it.last_price||0; }
         else { l.item_id=null; l.description=e.target.value; toast(`Pick an item from the ${pr.purchase_type} Item Master. If it is missing, request a new item.`,"err"); }
         setTimeout(draw,0);
       }
@@ -651,7 +664,14 @@ async function viewPR(id){
   wireApprove(myAppr);
 }
 
-function supplierOptions(t, sel){ return S.suppliers.filter(s=>s.status==="active" && s.purchase_type===t).map(s=>`<option value="${s.id}" ${s.id===sel?"selected":""}>${esc(s.name)} (${esc(s.code)})</option>`).join(""); }
+function supplierOptions(t, sel, itemId){
+  const all = S.suppliers.filter(s=>s.status==="active" && s.purchase_type===t);
+  const o = s=>{ const p = itemId && priceOf(s.id,itemId); return `<option value="${s.id}" ${s.id===sel?"selected":""}>${esc(s.name)}${p?` — ₱${money(p.price)}`:` (${esc(s.code)})`}</option>`; };
+  if(!itemId) return all.map(o).join("");
+  const listed = itemPrices(itemId).map(p=>all.find(s=>s.id===p.supplier_id)).filter(Boolean);
+  const rest = all.filter(s=>!listed.includes(s));
+  return (listed.length?`<optgroup label="Sells this item (cheapest first)">${listed.map(o).join("")}</optgroup>`:"") + `<optgroup label="${listed.length?"Other suppliers":"All suppliers"}">${rest.map(o).join("")}</optgroup>`;
+}
 function directPO(pr){ poFromPR(pr.purchase_type, pr.id); }
 // "Call" an approved PR into Purchase Orders — items can go to different suppliers (one PO per supplier)
 async function poFromPR(T, preId){
@@ -679,16 +699,17 @@ async function poFromPR(T, preId){
         used = {}; (on||[]).forEach(x=>{ if(x.po && x.po.status!=="cancelled") used[x.pr_line_id]=x.po.po_no; });
         const open = ls.filter(l=>!used[l.id]);
         $("#pfInfo",el).innerHTML = `<div class="card" style="margin:0"><div class="toolbar"><b>${esc(cur.pr_no)}</b> ${badge(cur.status)} <span class="muted small">${esc(cur.company?.code||"")} · ${esc(cur.dept?.name||"")} · requested by ${esc(pname(cur.requested_by))} · needed ${d8(cur.date_needed)}</span></div>
-          ${open.length?`<div class="row" style="margin-bottom:8px"><span class="small">Set supplier for ticked items:</span><select class="inp" id="pfBulk" style="width:240px"><option value="">— choose —</option>${supplierOptions(T)}</select><button class="btn sm" id="pfApply">Apply</button></div>`:""}
-          <div class="tbl-wrap"><table class="t"><thead><tr><th><input type="checkbox" id="pfAllC" style="width:16px;height:16px" ${open.length?"checked":"disabled"}></th><th>Item</th><th class="num">Qty</th><th>UOM</th><th class="num">Est. cost</th><th>Supplier</th><th>Status</th></tr></thead><tbody>
+          ${open.length?`<div class="row" style="margin-bottom:8px"><span class="small">Set supplier for ticked items:</span><select class="inp" id="pfBulk" style="width:240px"><option value="">— choose —</option>${supplierOptions(T)}</select><button class="btn sm" id="pfApply">Apply</button><button class="btn sm" id="pfBest" title="Pick the cheapest price-list supplier for each ticked item">Cheapest per item</button></div>`:""}
+          <div class="tbl-wrap"><table class="t"><thead><tr><th><input type="checkbox" id="pfAllC" style="width:16px;height:16px" ${open.length?"checked":"disabled"}></th><th>Item</th><th class="num">Qty</th><th>UOM</th><th class="num">Est. cost</th><th>Supplier (₱ = price list)</th><th>Status</th></tr></thead><tbody>
           ${ls.map(l=>`<tr style="${used[l.id]?"opacity:.55":""}"><td><input type="checkbox" class="pfL" value="${l.id}" ${used[l.id]?"disabled":"checked"} style="width:16px;height:16px"></td>
             <td>${esc(S.items.find(i=>i.id===l.item_id)?.code||"")} ${esc(l.description)}${l.cost_center?`<div class="small muted">${esc(l.cost_center)}</div>`:""}</td><td class="num">${qtyf(l.qty)}</td><td>${esc(l.uom)}</td><td class="num">${money(l.est_unit_cost)}</td>
-            <td>${used[l.id]?esc(S.suppliers.find(x=>x.id===l.supplier_id)?.name||"—"):`<select class="inp pfS" data-l="${l.id}" style="width:200px"><option value="">— select —</option>${supplierOptions(T, l.supplier_id)}</select>`}</td>
+            <td>${used[l.id]?esc(S.suppliers.find(x=>x.id===l.supplier_id)?.name||"—"):`<select class="inp pfS" data-l="${l.id}" style="width:240px"><option value="">— select —</option>${supplierOptions(T, l.supplier_id || itemPrices(l.item_id)[0]?.supplier_id, l.item_id)}</select>${itemPrices(l.item_id).length?`<div class="small muted">${itemPrices(l.item_id).length} supplier(s) on price list</div>`:""}`}</td>
             <td>${used[l.id]?`<span class="small">on ${esc(used[l.id])}</span>`:'<span class="badge b-pending" style="text-transform:none">open</span>'}</td></tr>`).join("")}</tbody></table></div>
           <div class="small" id="pfSum" style="margin-top:10px"></div></div>`;
         $$(".pfL,.pfS",el).forEach(x=>x.onchange=preview);
         if($("#pfAllC",el)) $("#pfAllC",el).onchange=e=>{ $$(".pfL:not(:disabled)",el).forEach(c=>c.checked=e.target.checked); preview(); };
         if($("#pfApply",el)) $("#pfApply",el).onclick=()=>{ const v=$("#pfBulk",el).value; if(!v) return toast("Choose a supplier.","err"); $$(".pfL:checked:not(:disabled)",el).forEach(c=>{ $(`.pfS[data-l="${c.value}"]`,el).value=v; }); preview(); };
+        if($("#pfBest",el)) $("#pfBest",el).onclick=()=>{ let n=0; $$(".pfL:checked:not(:disabled)",el).forEach(c=>{ const l=ls.find(y=>y.id===c.value); const b=l&&itemPrices(l.item_id)[0]; if(b){ $(`.pfS[data-l="${c.value}"]`,el).value=b.supplier_id; n++; } }); toast(n?`Cheapest supplier set on ${n} item(s).`:"No ticked item is on a price list.", n?"ok":"err"); preview(); };
         preview();
       };
       $("#pfQ",el).onchange = load; $("#pfQ",el).oninput = ()=>{ if(list.some(p=>p.pr_no.toUpperCase()===$("#pfQ",el).value.trim().toUpperCase())) load(); };
@@ -1044,17 +1065,65 @@ async function viewMaster(kind, m){
   const draw = ()=>{
     const q=$("#mQ").value.trim().toLowerCase(), st=$("#mSt").value;
     const rows = list.filter(r=>(!st||r.status===st) && (!q || cols.some(c=>String(r[c]??"").toLowerCase().includes(q))));
-    $("#mTbl").innerHTML = rows.length ? `<div class="tbl-wrap"><table class="t"><thead><tr>${heads.map(h=>`<th>${h}</th>`).join("")}<th>Status</th><th></th></tr></thead><tbody>
-      ${rows.slice(0,1000).map(r=>`<tr>${cols.map(c=>`<td class="${c==="last_price"?"num":""}">${c==="last_price"?money(r[c]):esc(r[c])}</td>`).join("")}<td>${badge(r.status)} ${pendSet.has(r.id)?'<span class="badge b-pending">change pending</span>':""}</td>
+    $("#mTbl").innerHTML = rows.length ? `<div class="tbl-wrap"><table class="t"><thead><tr>${heads.map(h=>`<th>${h}</th>`).join("")}<th>${isItem?"Suppliers / best price":"Items supplied"}</th><th>Status</th><th></th></tr></thead><tbody>
+      ${rows.slice(0,1000).map(r=>`<tr>${cols.map(c=>`<td class="${c==="last_price"?"num":""}">${c==="last_price"?money(r[c]):esc(r[c])}</td>`).join("")}<td>${plCell(kind,r)}</td><td>${badge(r.status)} ${pendSet.has(r.id)?'<span class="badge b-pending">change pending</span>':""}</td>
         <td>${S.me.role!=="viewer"&&!pendSet.has(r.id)?`<div class="row" style="flex-wrap:nowrap"><button class="btn sm" data-ed="${r.id}">${isAdmin()?"Edit":"Request change"}</button><button class="btn sm ${r.status==="active"?"warn":""}" data-tg="${r.id}">${r.status==="active"?"Deactivate":"Activate"}</button></div>`:""}</td></tr>`).join("")}
       </tbody></table></div>${rows.length>1000?`<div class="small muted">Showing first 1000 of ${rows.length}. Refine your search.</div>`:""}` : `<div class="card empty">${list.length?"No records match your search / status filter.":`No ${T} ${isItem?"items":"suppliers"} yet. ${S.me.role==="viewer"?"":`Click <b>＋ ${isAdmin()?"Add":"Request new"}</b> above${isAdmin()?" or <b>Import Excel</b>":""} to add the first one.`}`}</div>`;
     $$("[data-ed]").forEach(b=>b.onclick=()=>masterRequestForm(kind,"update",list.find(r=>r.id===b.dataset.ed),T));
     $$("[data-tg]").forEach(b=>b.onclick=()=>{ const r=list.find(x=>x.id===b.dataset.tg); masterToggle(kind,r); });
+    $$("[data-pl]").forEach(b=>b.onclick=()=>priceList(kind, list.find(x=>x.id===b.dataset.pl), T));
   };
   $("#mQ").oninput=draw; $("#mSt").onchange=draw; draw();
   if($("#mNew")) $("#mNew").onclick=()=>masterRequestForm(kind,"create",null,T);
   $("#mExp").onclick=()=>exportXlsx(list.map(r=>Object.fromEntries(MF[kind].map(f=>[f.k,r[f.k]]).concat([["status",r.status]]))), T.replace("-","")+(isItem?"_Item_Master":"_Supplier_Master"));
   if($("#mImp")) $("#mImp").onclick=()=>masterImport(kind,T);
+}
+function plCell(kind, r){
+  if(kind==="item"){ const ps=itemPrices(r.id); return `<a data-pl="${r.id}">${ps.length?`${ps.length} supplier${ps.length>1?"s":""} · best ₱${money(ps[0].price)}`:(isAdmin()?"＋ link supplier":"—")}</a>`; }
+  const n=supPrices(r.id).length; return `<a data-pl="${r.id}">${n?`${n} item${n>1?"s":""}`:(isAdmin()?"＋ link items":"—")}</a>`;
+}
+// Price list: which supplier sells which item — admin maintains, everyone in the module can see
+function priceList(kind, rec, T){
+  const isItem = kind==="item", admin = isAdmin();
+  const rows = ()=> isItem ? itemPrices(rec.id).concat((S.prices||[]).filter(p=>p.item_id===rec.id && !itemPrices(rec.id).includes(p)))
+                           : supPrices(rec.id).slice().sort((a,b)=>(S.items.find(i=>i.id===a.item_id)?.description||"").localeCompare(S.items.find(i=>i.id===b.item_id)?.description||""));
+  const other = id => isItem ? S.suppliers.find(s=>s.id===id) : S.items.find(i=>i.id===id);
+  const pool = (isItem ? S.suppliers : S.items).filter(x=>x.purchase_type===T && x.status==="active");
+  modal({title:`Price list — ${esc(isItem?rec.description:rec.name)}`, wide:true, body:`
+    <div class="note info">${isItem?"Suppliers that sell this item":"Items this supplier sells"}, with their price. PRs and POs use these prices and suggest the <b>cheapest</b> supplier. ${admin?"":"Only the Module Admin can change the price list."}</div>
+    <div class="tbl-wrap"><table class="t"><thead><tr><th>${isItem?"Supplier":"Item"}</th>${isItem?"":"<th>UOM</th>"}<th class="num">Price</th><th>Basis</th><th>Price date</th><th>Remarks</th>${admin?"<th></th>":""}</tr></thead><tbody id="plB"></tbody></table></div>
+    ${admin?`<div class="card" style="margin:12px 0 0"><h3 style="margin-top:0">Add / update price</h3><div class="pl-grid">
+      <div class="fld"><label>${isItem?"Supplier":"Item"} *</label><input id="plX" list="plDl" placeholder="${isItem?"Type supplier name":"Type item code or description"}"><datalist id="plDl">${pool.map(x=>`<option value="${esc(isItem?x.name:x.code+" — "+x.description)}"></option>`).join("")}</datalist></div>
+      <div class="fld"><label>Price *</label><input id="plP" class="right" inputmode="decimal"></div>
+      <div class="fld"><label>Basis</label><select id="plBs"><option>VAT-INCLUSIVE</option><option>VAT-EXCLUSIVE</option><option>NON-VAT</option></select></div>
+      <div class="fld"><label>Price date</label><input type="date" id="plD" value="${today()}"></div>
+      <div class="fld"><label>Remarks</label><input id="plR"></div>
+      <div class="fld"><label>&nbsp;</label><button class="btn pri" id="plOk">Save</button></div></div></div>`:""}`,
+    foot:`<button class="btn" data-close>Close</button>`,
+    onOpen:(el)=>{
+      const draw = ()=>{ const rs=rows(); $("#plB",el).innerHTML = rs.length ? rs.map((p,i)=>{ const o=other(isItem?p.supplier_id:p.item_id);
+        return `<tr><td>${esc(isItem?(o?.name||"?"):((o?.code||"")+" "+(o?.description||"")))}${isItem&&i===0&&p.active?' <span class="badge b-approved" style="text-transform:none">cheapest</span>':""}${p.active?"":' <span class="badge b-cancelled">inactive</span>'}</td>${isItem?"":`<td>${esc(o?.uom||"")}</td>`}
+          <td class="num">${money(p.price)}</td><td class="small">${esc(p.price_basis)}</td><td>${d8(p.price_date)}</td><td class="small">${esc(p.remarks||"")}</td>
+          ${admin?`<td><div class="row" style="flex-wrap:nowrap"><button class="btn sm" data-pe="${p.id}">Edit</button><button class="btn sm warn" data-pd="${p.id}">Remove</button></div></td>`:""}</tr>`; }).join("")
+        : `<tr><td colspan="7" class="empty">Nothing linked yet.</td></tr>`;
+        $$("[data-pe]",el).forEach(b=>b.onclick=()=>{ const p=S.prices.find(x=>x.id===b.dataset.pe), o=other(isItem?p.supplier_id:p.item_id);
+          $("#plX",el).value = isItem?o.name:o.code+" — "+o.description; $("#plP",el).value=p.price; $("#plBs",el).value=p.price_basis; $("#plD",el).value=p.price_date||today(); $("#plR",el).value=p.remarks||""; $("#plP",el).focus(); });
+        $$("[data-pd]",el).forEach(b=>b.onclick=async()=>{ if(!await confirmBox("Remove from price list","Remove this supplier–item price?")) return;
+          try{ await run(async()=>chk(await sb.from("pur_supplier_items").delete().eq("id",b.dataset.pd)),"Removed."); }catch(e){ return; } S.prices=S.prices.filter(x=>x.id!==b.dataset.pd); draw(); });
+      };
+      draw();
+      if(admin) $("#plOk",el).onclick=async()=>{
+        const v=$("#plX",el).value.trim(); const o = isItem ? pool.find(s=>s.name.toLowerCase()===v.toLowerCase()) : itemFromText(v,T);
+        if(!o) return toast(`Pick a ${T} ${isItem?"supplier":"item"} from the list.`,"err");
+        const pr=$("#plP",el).value.trim(); if(pr===""||num(pr)<0) return toast("Enter a price.","err");
+        const row={supplier_id:isItem?o.id:rec.id, item_id:isItem?rec.id:o.id, price:num(pr), price_basis:$("#plBs",el).value, price_date:$("#plD",el).value||null, remarks:$("#plR",el).value.trim(), active:true};
+        let r; try{ r = await run(async()=>chk(await sb.from("pur_supplier_items").upsert(row,{onConflict:"supplier_id,item_id"}).select().single()),"Price saved."); }catch(e){ return; }
+        if(!r) return; S.prices = S.prices.filter(x=>x.id!==r.id && !(x.supplier_id===r.supplier_id&&x.item_id===r.item_id)).concat([r]);
+        ["#plX","#plP","#plR"].forEach(k=>$(k,el).value=""); draw();
+        $$("[data-pl]").forEach(a=>{ const x=(isItem?S.items:S.suppliers).find(y=>y.id===a.dataset.pl); if(x) a.outerHTML=plCell(kind,x); });
+        $$("[data-pl]").forEach(b=>b.onclick=()=>priceList(kind,(isItem?S.items:S.suppliers).find(x=>x.id===b.dataset.pl),T));
+      };
+    }});
 }
 async function masterToggle(kind, r){
   const action = r.status==="active" ? "deactivate" : "activate";

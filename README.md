@@ -33,6 +33,11 @@ Accounting / Purchasing record payments on approved POs (date of payment, amount
 ## Master data control
 Item Master and Supplier Master are controlled by the **Module Admin**. Other users submit *Master Data Requests* (new / change / deactivate / activate). The Module Admin approves or rejects; approved requests are applied automatically. Only active (approved) items and suppliers can be used on PRs, canvasses and POs.
 
+## Supplier price list
+Each item is linked to the suppliers that sell it, with a price (`pur_supplier_items`, maintained by the Module Admin from the **Items supplied** / **Suppliers / best price** column of either master). On a PR, picking an item suggests the **cheapest** listed supplier and its price. In *PO from PR*, each item's supplier list shows prices with the cheapest first, and **Cheapest per item** fills them all in. POs created from PRs use the chosen supplier's list price.
+
+Loaded 26 Oct 2026 from *Packaging_Supplier_with_Items.xlsx* (Non-Trade): 14 suppliers, 29 items, 38 prices (migration 021). UOM was defaulted to PC and VAT type to VAT. Review these.
+
 ## Roles
 | Role | Can do |
 |---|---|
