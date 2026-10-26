@@ -3,12 +3,14 @@
 Single-page web app (GitHub Pages) + Supabase (`bom-system` project, tables prefixed `pur_`) for all Meatplus group companies:
 MTC, PMAI, PAEI, FSEI, MLC, NBC.
 
-## Purchase types
-Every PR and PO is either **Trade** (goods for resale / production) or **Non-Trade** (supplies, services, assets).
-- POs inherit the type of their PR.
-- Approval Matrix steps can apply to **All**, **Trade** only or **Non-Trade** only — so the two types can have different approvers.
-- Items are tagged **Both**, **Trade** or **Non-Trade**; a PR only accepts items allowed for its type.
-- Lists can be filtered by type; the type is printed on PR, canvass and PO forms.
+## Modules: Trade and Non-Trade
+Trade (goods for resale / production) and Non-Trade (supplies, services, assets) are **separate modules**, each with its own menu: Purchase Requisition, Canvass / RFQ, Purchase Orders, Receiving and its own **Supplier Master**.
+- Separate numbering: `PR-T-MTC-2026-00001` / `PR-N-…`, `CV-T/N`, `PO-T/N`, `RR-T/N`; suppliers `SUP-T-00001` / `SUP-N-00001`.
+- Each user has **Module access**: Trade only, Non-Trade only, or both (Setup → Users). Users only see documents and suppliers of their modules; approvers still see what is routed to them.
+- POs, canvasses and receiving reports inherit the module of their PR; a document's module never changes.
+- A supplier belongs to one module; a canvass / PO only accepts active suppliers of the same module.
+- Approval Matrix steps apply to **All**, **Trade** or **Non-Trade**.
+- The **Item Master** is shared; items are tagged Both / Trade / Non-Trade and a PR only accepts items allowed in its module.
 
 ## Workflow
 1. **Purchase Requisition (PR)** — requester picks items from the Item Master, submits.
@@ -32,7 +34,7 @@ Item Master and Supplier Master are controlled by the **Module Admin**. Other us
 Anyone listed in the Approval Matrix can approve, whatever their role.
 
 ## Document numbers
-`PR-MTC-2026-00001`, `CV-…`, `PO-…`, `RR-…` per company per year; items `ITM-00001`, suppliers `SUP-00001`.
+`PR-T-MTC-2026-00001` (Trade) / `PR-N-MTC-2026-00001` (Non-Trade), same for CV, PO, RR — per module, company and year; items `ITM-00001`; suppliers `SUP-T-00001` / `SUP-N-00001`.
 
 ## Backend
 - `supabase/migrations/*.sql` — schema, RLS, workflow functions (already applied to `bom-system`).
