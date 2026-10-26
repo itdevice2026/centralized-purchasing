@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
         });
         if (error) {
           if (/database error/i.test(error.message || '')) {
-            return json({ error: 'Account was refused by the database. Logins must use an @meatplus.ph email or an email on file in the HRIS masterfile.' }, 400);
+            return json({ error: 'Account was refused: this email domain is not allowed. Add it in Setup → Email Domains, or use an @meatplus.ph email.' }, 400);
           }
           return json({ error: error.message }, 400);
         }

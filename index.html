@@ -1205,9 +1205,9 @@ async function viewSetup(tab){
   if(!isAdmin()) throw new Error("Module Admin only.");
   tab = tab || "matrix";
   const T = (k,l)=>`<button class="btn ${tab===k?"pri":""}" onclick="go('setup/${k}')">${l}</button>`;
-  $("#view").innerHTML = `<div class="row" style="margin-bottom:14px">${T("matrix","Approval Matrix")}${T("users","Users & Access")}${T("companies","Companies")}${T("depts","Departments")}</div><div id="setupBody"></div>`;
+  $("#view").innerHTML = `<div class="row" style="margin-bottom:14px">${T("matrix","Approval Matrix")}${T("users","Users & Access")}${T("companies","Companies")}${T("depts","Departments")}${T("domains","Email Domains")}</div><div id="setupBody"></div>`;
   await loadRefs();
-  ({matrix:setupMatrix, users:setupUsers, companies:setupCompanies, depts:setupDepts}[tab]||setupMatrix)();
+  ({matrix:setupMatrix, users:setupUsers, companies:setupCompanies, depts:setupDepts, domains:setupDomains}[tab]||setupMatrix)();
 }
 async function setupMatrix(){
   const rules = chk(await sb.from("pur_approval_rules").select("*").order("doc_type").order("step_no").order("purchase_type").order("min_amount"));
@@ -1257,7 +1257,7 @@ function setPasswordFor(p){
 function userForm(p, mine=[], preset){
   const isNew = !p;
   modal({title:isNew?"Add user":"Edit user", body:`<div class="grid">
-      <div class="fld"><label>Email *</label><input id="uE" type="email" value="${esc(p?.email||"")}" ${isNew?"":"disabled"}></div>
+      <div class="fld"><label>Email *</label><input id="uE" type="email" value="${esc(p?.email||"")}" ${isNew?"":"disabled"}>${isNew?'<div id="uEst" class="small" style="min-height:16px"></div>':""}</div>
       <div class="fld"><label>Full name *</label><input id="uN" value="${esc(p?.full_name||"")}"></div>
       <div class="fld"><label>Position</label><input id="uP" value="${esc(p?.position||"")}"></div>
       <div class="fld"><label>Role</label><select id="uR">${Object.entries(ROLE_LABEL).map(([k,v])=>`<option value="${k}" ${(p?.role||"requester")===k?"selected":""}>${v}</option>`).join("")}</select></div>
@@ -1271,6 +1271,15 @@ function userForm(p, mine=[], preset){
     <div class="note info" id="uCoAllNote" style="margin:14px 0 0">This role works across <b>all companies</b> — no company selection needed.</div>`,
     foot:`${isNew?"":'<button class="btn" id="uRst">Reset password</button><span style="flex:1"></span>'}<button class="btn" data-close>Cancel</button><button class="btn pri" id="uOk">Save</button>`,
     onOpen:(el,close)=>{
+      if($("#uEst",el)){ let tm; const chkEmail = async()=>{ const v=$("#uE",el).value.trim(); const o=$("#uEst",el); if(!v){o.innerHTML="";return;}
+          try{ const st = await rpc("pur_email_status",{p_email:v});
+            o.innerHTML = !st.valid ? '<span style="color:var(--red)">Not a valid email address.</span>'
+              : st.in_purchasing ? '<span style="color:var(--red)">✖ Already a Purchasing user — use 🔑 Set password on their row instead.</span>'
+              : st.exists ? '<span style="color:#b45309">⚠ This email already has a login used in Resolve-IT / other Meatplus apps. The password you type will replace it there too. Tip: use a separate company email for Purchasing.</span>'
+              : !st.domain_allowed ? '<span style="color:var(--red)">✖ This email domain is not allowed. Add it in Setup → Email Domains first.</span>'
+              : '<span style="color:var(--green)">✔ New login — separate from Resolve-IT and the other apps.</span>';
+          }catch(e){ o.textContent=""; } };
+        $("#uE",el).oninput = ()=>{ clearTimeout(tm); tm=setTimeout(chkEmail,450); }; }
       const coRole = ()=>{ const all=["admin","purchasing","executive","accounting"].includes($("#uR",el).value); $("#uCoWrap",el).classList.toggle("hide",all); $("#uCoAllNote",el).classList.toggle("hide",!all); };
       $("#uR",el).onchange = coRole; coRole();
       $("#uCoAll",el).onclick = ()=>$$(".uC",el).forEach(c=>c.checked=true);
@@ -1355,6 +1364,18 @@ async function viewModuleUsers(){
       foot:`<button class="btn" data-close>Cancel</button><button class="btn pri" id="aeOk">Add to ${t}</button>`,
       onOpen:(el,close)=>{ $("#aeOk",el).onclick=async()=>{ close(); saveAccess($("#aeU",el).value, $("#aeMove",el).checked ? t : "Both"); }; }});
   });
+}
+async function setupDomains(){
+  const rows = chk(await sb.from("pur_email_domains").select("*").order("domain"));
+  $("#setupBody").innerHTML = `<div class="note info">New logins can only be created for email addresses on these company domains (or emails already in the HRIS masterfile). Add the domain of each group company so you can give Purchasing users their <b>own company email</b> — separate from logins used in Resolve-IT and the other apps.</div>
+    <div class="tbl-wrap"><table class="t"><thead><tr><th>Domain</th><th>Company</th><th>Note</th><th></th></tr></thead><tbody>
+    ${rows.map(d=>`<tr><td class="bold">@${esc(d.domain)}</td><td>${esc(d.company_code)}</td><td>${esc(d.note)}</td><td>${d.domain==="meatplus.ph"?'<span class="small muted">built-in</span>':`<button class="btn sm warn" data-ddel="${esc(d.domain)}">Remove</button>`}</td></tr>`).join("")}
+    <tr><td><input class="inp" id="ndD" placeholder="e.g. northbreeders.ph"></td><td><select class="inp" id="ndC"><option value="">—</option>${S.companies.map(c=>`<option>${esc(c.code)}</option>`).join("")}</select></td><td><input class="inp" id="ndN" placeholder="Note"></td><td><button class="btn sm pri" id="ndAdd">Add</button></td></tr>
+    </tbody></table></div>`;
+  $("#ndAdd").onclick = async()=>{ const d=$("#ndD").value.trim().toLowerCase().replace(/^.*@/,""); if(!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d)) return toast("Enter a domain like company.ph","err");
+    await run(async()=>chk(await sb.from("pur_email_domains").insert({domain:d,company_code:$("#ndC").value,note:$("#ndN").value.trim()})),"Domain added."); setupDomains(); };
+  $$("[data-ddel]").forEach(b=>b.onclick=async()=>{ if(!await confirmBox("Remove domain",`New logins for <b>@${esc(b.dataset.ddel)}</b> will no longer be allowed. Existing logins are not affected.`)) return;
+    await run(async()=>chk(await sb.from("pur_email_domains").delete().eq("domain",b.dataset.ddel)),"Removed."); setupDomains(); });
 }
 async function setupCompanies(){
   $("#setupBody").innerHTML = `<div class="tbl-wrap"><table class="t"><thead><tr><th>Logo</th><th>Code</th><th>Name</th><th>TIN</th><th>Address</th><th>Status</th><th></th></tr></thead><tbody>
