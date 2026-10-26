@@ -1146,7 +1146,7 @@ function masterRequestForm(kind, action, rec, T){
       <div class="grid">${f.map(x=>`<div class="fld" ${x.ta?'style="grid-column:1/-1"':""}><label>${esc(x.l)}${x.req?" *":""}</label>${
         x.opt?`<select data-k="${x.k}">${x.opt.map(o=>`<option ${o===val(x.k)?"selected":""}>${o}</option>`).join("")}</select>`
         : x.ta?`<textarea data-k="${x.k}">${esc(val(x.k))}</textarea>`
-        : `<input data-k="${x.k}" value="${esc(val(x.k))}" ${x.k==="code"&&rec?"disabled":""} ${x.n?'inputmode="decimal"':""}>`}</div>`).join("")}</div>
+        : `<input data-k="${x.k}" value="${esc(val(x.k))}" ${x.k==="code"&&rec&&!direct?"disabled":""} ${x.n?'inputmode="decimal"':""}>`}</div>`).join("")}</div>
       ${direct?"":`<div class="fld" style="margin-top:12px"><label>Reason / justification *</label><textarea id="mrWhy"></textarea></div>`}`,
     foot:`<button class="btn" data-close>Cancel</button><button class="btn pri" id="mrOk">${direct?"Save":"Send request"}</button>`,
     onOpen:(el,close)=>{ $("#mrOk",el).onclick=async()=>{
