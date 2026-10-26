@@ -1,5 +1,5 @@
 // Centralized Purchasing — user account management (Module Admin only)
-// actions: create (creates or links a login + purchasing profile), reset (sets a new password)
+// actions: create (creates or links a login + purchasing profile; always applies the typed password), reset (sets a new password)
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const cors = {
@@ -37,13 +37,25 @@ Deno.serve(async (req) => {
 
       let userId: string | null = null;
       let linked = false;
+      let passwordSet = false;
+      const password = String(body.password || '');
+      if (password && password.length < 8) return json({ error: 'Password must be at least 8 characters.' }, 400);
       const { data: found } = await admin.rpc('pur_find_user', { p_email: email });
       if (found) {
+        // Existing login (shared with Resolve-IT / other Meatplus apps): link it, and apply the typed password if given.
         userId = found as string;
         linked = true;
+        const { data: already } = await admin.from('pur_profiles').select('user_id').eq('user_id', userId).maybeSingle();
+        if (already) return json({ error: 'This user is already in the Purchasing System.' }, 409);
+        if (password) {
+          const { data: cur } = await admin.auth.admin.getUserById(userId);
+          const meta = { ...(cur?.user?.user_metadata || {}), pur_must_change: true };
+          const { error: pe2 } = await admin.auth.admin.updateUserById(userId, { password, user_metadata: meta, email_confirm: true });
+          if (pe2) return json({ error: pe2.message }, 400);
+          passwordSet = true;
+        }
       } else {
-        const password = String(body.password || '');
-        if (password.length < 8) return json({ error: 'Password must be at least 8 characters for a new login.' }, 400);
+        if (!password) return json({ error: 'Enter a temporary password (at least 8 characters) for the new login.' }, 400);
         const { data, error } = await admin.auth.admin.createUser({
           email, password, email_confirm: true,
           user_metadata: { full_name, pur_must_change: true },
@@ -55,6 +67,7 @@ Deno.serve(async (req) => {
           return json({ error: error.message }, 400);
         }
         userId = data.user.id;
+        passwordSet = true;
       }
       const { data: exists } = await admin.from('pur_profiles').select('user_id').eq('user_id', userId).maybeSingle();
       if (exists) return json({ error: 'This user is already in the Purchasing System.' }, 409);
@@ -66,7 +79,7 @@ Deno.serve(async (req) => {
       if (companies.length) {
         await admin.from('pur_user_companies').insert(companies.map((c) => ({ user_id: userId, company_id: c })));
       }
-      return json({ ok: true, user_id: userId, linked });
+      return json({ ok: true, user_id: userId, linked, password_set: passwordSet });
     }
 
     if (action === 'reset') {

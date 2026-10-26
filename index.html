@@ -1251,7 +1251,7 @@ function userForm(p, mine=[], preset){
       <div class="fld"><label>Position</label><input id="uP" value="${esc(p?.position||"")}"></div>
       <div class="fld"><label>Role</label><select id="uR">${Object.entries(ROLE_LABEL).map(([k,v])=>`<option value="${k}" ${(p?.role||"requester")===k?"selected":""}>${v}</option>`).join("")}</select></div>
       <div class="fld"><label>Module access</label><select id="uM">${[["Both","Trade + Non-Trade"],["Trade","Trade only"],["Non-Trade","Non-Trade only"]].map(([k,v])=>`<option value="${k}" ${(preset||p?.module_access||"Both")===k?"selected":""}>${v}</option>`).join("")}</select></div>
-      ${isNew?`<div class="fld"><label>Temporary password</label><input id="uPw" type="text" placeholder="min. 8 characters"><span class="small muted">If the email already has a login in another Meatplus app, you'll be asked whether to replace it.</span></div>`:`<div class="fld"><label>Status</label><select id="uA"><option value="1" ${p.active?"selected":""}>Active</option><option value="0" ${!p.active?"selected":""}>Inactive</option></select></div>`}
+      ${isNew?`<div class="fld"><label>Temporary password</label><input id="uPw" type="text" placeholder="min. 8 characters"><span class="small muted">Always applied. If the email already has a login (Resolve-IT or other Meatplus apps), it is replaced there too. Leave blank only to keep an existing password.</span></div>`:`<div class="fld"><label>Status</label><select id="uA"><option value="1" ${p.active?"selected":""}>Active</option><option value="0" ${!p.active?"selected":""}>Inactive</option></select></div>`}
     </div>
     <div class="fld" style="margin-top:14px" id="uCoWrap">
       <div class="row" style="justify-content:space-between"><label style="margin:0">Companies</label><span class="small"><a href="javascript:void 0" id="uCoAll">Select all</a> · <a href="javascript:void 0" id="uCoNone">Clear</a></span></div>
@@ -1271,20 +1271,9 @@ function userForm(p, mine=[], preset){
           const {data:{session}} = await sb.auth.getSession();
           const res = await run(async()=>{ const r=await fetch(FN_ADMIN,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token,apikey:SUPABASE_KEY},body:JSON.stringify({action:"create",email:$("#uE",el).value,full_name:$("#uN",el).value,position:$("#uP",el).value,role:$("#uR",el).value,password:$("#uPw",el).value,company_ids:cids})}); const j=await r.json(); if(!r.ok) throw new Error(j.error||"Failed"); return j; });
           if(!res) return; await sb.from("pur_profiles").update({module_access:$("#uM",el).value}).eq("user_id",res.user_id);
-          if(res.linked){
-            const pw=$("#uPw",el).value, email=$("#uE",el).value.trim();
-            close(); await loadRefs(); (location.hash.startsWith("#musers")?viewModuleUsers:setupUsers)();
-            modal({title:"Existing login linked", body:`<p style="margin-top:0"><b>${esc(email)}</b> already had a login from another Meatplus app, so it was linked — <b>the password was not changed</b>. The user signs in with the password they already use in that app.</p>
-              <div class="note">If they don't know that password, set a temporary one now. They will be asked to change it at their next sign-in. <b>This also changes their password in the other Meatplus apps.</b></div>
-              <div class="fld"><label>Temporary password (min. 8)</label><input id="lkPw" type="text" value="${esc(pw)}"></div>`,
-              foot:`<button class="btn" data-close>Keep current password</button><button class="btn pri" id="lkOk">Set temporary password</button>`,
-              onOpen:(m,mclose)=>{ $("#lkOk",m).onclick=async()=>{ const np=$("#lkPw",m).value; if(np.length<8) return toast("At least 8 characters.","err");
-                const {data:{session}} = await sb.auth.getSession();
-                const ok = await run(async()=>{ const r=await fetch(FN_ADMIN,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token,apikey:SUPABASE_KEY},body:JSON.stringify({action:"reset",user_id:res.user_id,password:np})}); const j=await r.json(); if(!r.ok) throw new Error(j.error||"Failed"); return true; },"Temporary password set. The user must change it at first sign-in.");
-                if(ok) mclose(); }; }});
-            return;
-          }
-          toast("User created. They must change the password at first sign-in.","ok");
+          toast(!res.linked ? "User created. They must change the password at first sign-in."
+            : res.password_set ? "Existing login linked and the password you typed is now set. They must change it at first sign-in (this also applies to their other Meatplus apps)."
+            : "Existing login linked. No password was typed, so they keep their current password.", res.linked&&!res.password_set?"":"ok");
         } else {
           await run(async()=>{ chk(await sb.from("pur_profiles").update({full_name:$("#uN",el).value.trim(),position:$("#uP",el).value.trim(),role:$("#uR",el).value,module_access:$("#uM",el).value,active:$("#uA",el).value==="1"}).eq("user_id",p.user_id));
             const add=cids.filter(c=>!mine.includes(c)), del=mine.filter(c=>!cids.includes(c));
