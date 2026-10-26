@@ -1238,10 +1238,21 @@ async function setupUsers(){
   $("#setupBody").innerHTML = `<div class="toolbar"><div class="note info" style="margin:0;flex:1">Logins are shared with the other Meatplus apps. Adding an email that already has a login just links it — no new password needed. <b>Purchasing</b> and <b>Module Admin</b> roles see all companies. <b>Module access</b> decides whether the user works in Trade, Non-Trade or both.</div><button class="btn pri" id="uNew">＋ Add user</button></div>
     <div class="tbl-wrap"><table class="t"><thead><tr><th>Name</th><th>Email</th><th>Position</th><th>Role</th><th>Modules</th><th>Companies</th><th>Status</th><th></th></tr></thead><tbody>
     ${profs.map(p=>`<tr><td class="bold">${esc(p.full_name)}</td><td>${esc(p.email)}</td><td>${esc(p.position)}</td><td>${esc(ROLE_LABEL[p.role])}</td><td>${p.role==="admin"||p.module_access==="Both"?"Trade + Non-Trade":ptype(p.module_access)}</td><td>${["admin","purchasing"].includes(p.role)?"<i>All</i>":esc(cos(p.user_id)||"—")}</td><td>${badge(p.active?"active":"inactive")}</td>
-      <td><button class="btn sm" data-eu="${p.user_id}">Edit</button></td></tr>`).join("")}</tbody></table></div>
+      <td><div class="row" style="flex-wrap:nowrap"><button class="btn sm" data-eu="${p.user_id}">Edit</button><button class="btn sm" data-pw="${p.user_id}">🔑 Set password</button></div></td></tr>`).join("")}</tbody></table></div>
     <div class="card small muted" style="margin-top:14px"><b>Roles:</b> Module Admin — setup, approval matrix, users, approves item/supplier master data · President / Executive — Executive Dashboard, read-only view of all companies · Accounting — records payments on POs · Purchasing — all companies, canvass, POs · Requester — creates PRs for assigned companies · Receiver — receives deliveries for assigned companies · Viewer — read only. Anyone listed in the Approval Matrix can approve.</div>`;
   $("#uNew").onclick = ()=>userForm();
+  $$("[data-pw]").forEach(b=>b.onclick=()=>setPasswordFor(profs.find(p=>p.user_id===b.dataset.pw)));
   $$("[data-eu]").forEach(b=>b.onclick=()=>userForm(profs.find(p=>p.user_id===b.dataset.eu), uc.filter(x=>x.user_id===b.dataset.eu).map(x=>x.company_id)));
+}
+function setPasswordFor(p){
+  modal({title:"Set password — "+(p.full_name||p.email), body:`<div class="note">Sets a temporary password for <b>${esc(p.email)}</b>. The user must change it at first sign-in. <b>This login is shared</b> with Resolve-IT and the other Meatplus apps, so the new password applies there too.</div>
+    <div class="fld"><label>Temporary password (min. 8 characters)</label><input id="spw" type="text" autocomplete="off"></div>`,
+    foot:`<button class="btn" data-close>Cancel</button><button class="btn pri" id="spwOk">Set password</button>`,
+    onOpen:(el,close)=>{ $("#spw",el).focus(); $("#spwOk",el).onclick=async()=>{ const pw=$("#spw",el).value; if(pw.length<8) return toast("At least 8 characters.","err");
+      const {data:{session}} = await sb.auth.getSession();
+      const ok = await run(async()=>{ const r=await fetch(FN_ADMIN,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token,apikey:SUPABASE_KEY},body:JSON.stringify({action:"reset",user_id:p.user_id,password:pw})}); const j=await r.json(); if(!r.ok) throw new Error(j.error||"Failed"); return true; });
+      if(ok){ close(); modal({title:"Password set", body:`<p style="margin:0">Give <b>${esc(p.full_name||p.email)}</b> these sign-in details:</p><div class="card" style="margin:12px 0 0"><div>Email: <b>${esc(p.email)}</b></div><div>Temporary password: <b>${esc(pw)}</b></div></div><p class="small muted">They will be asked to choose their own password after signing in.</p>`, foot:`<button class="btn pri" data-close>Done</button>`}); }
+    }; }});
 }
 function userForm(p, mine=[], preset){
   const isNew = !p;
