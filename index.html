@@ -320,7 +320,7 @@ const ROUTES = {
   canvass:{t:"Canvass / RFQ", f:viewCVList, mod:1}, "cv-edit":{t:"Canvass / RFQ", f:viewCV},
   po:{t:"Purchase Orders", f:viewPOList, mod:1}, "po-edit":{t:"Purchase Order", f:viewPO},
   rr:{t:"Receiving", f:viewRRList, mod:1}, "rr-view":{t:"Receiving Report", f:viewRR},
-  items:{t:"Item Master", f:()=>viewMaster("item")}, suppliers:{t:"Supplier Master", f:m=>viewMaster("supplier", m), mod:1},
+  items:{t:"Item Master", f:m=>viewMaster("item", m), mod:1}, suppliers:{t:"Supplier Master", f:m=>viewMaster("supplier", m), mod:1},
   mreq:{t:"Master Data Requests", f:viewMasterRequests},
   setup:{t:"Setup", f:viewSetup},
   musers:{t:"Module Users", f:viewModuleUsers},
@@ -340,14 +340,14 @@ function renderNav(){
     ${a("pr/"+m,"Purchase Requisition","📝")}
     ${isPurch()?a("canvass/"+m,"Canvass / RFQ","⚖"):""}
     ${a("po/"+m,"Purchase Orders","📄")}
-    ${a("rr/"+m,"Receiving","📦")}
-    ${a("suppliers/"+m, t+" Suppliers","🏢")}`; };
+    ${a("rr/"+m,"Receiving","📦")}`; };
   $("#nav").innerHTML = `
     ${a("dashboard","Dashboard","▦")}
     ${a("approvals","My Approvals","✔",S.counts.ap)}
     ${myTypes().map(modNav).join("")}
     <div class="grp">Master Data</div>
-    ${a("items","Item Master","▤")}
+    ${myTypes().map(t=>a("items/"+mc(t),t+" Items","▤")).join("")}
+    ${myTypes().map(t=>a("suppliers/"+mc(t),t+" Suppliers","🏢")).join("")}
     ${S.me.role!=="viewer"?a("mreq","Master Data Requests","⇄",S.counts.mr):""}
     ${isAdmin()?`<div class="grp">Module Admin</div>${a("musers","Module Users","👥")}${a("setup","Setup","⚙")}`:""}`;
 }
@@ -485,7 +485,7 @@ async function viewPRList(m){
   await load();
 }
 
-function itemOk(i, t){ return i.status==="active" && (!t || i.purchase_type==="Both" || i.purchase_type===t); }
+function itemOk(i, t){ return i.status==="active" && (!t || i.purchase_type===t); }
 function itemDatalist(t){ return `<datalist id="dlItems">${S.items.filter(i=>itemOk(i,t)).map(i=>`<option value="${esc(i.code)} — ${esc(i.description)}"></option>`).join("")}</datalist>`; }
 function itemFromText(v, t){ const code = String(v||"").split(" — ")[0].trim().toUpperCase(); return S.items.find(i=>i.code===code && itemOk(i,t)); }
 
@@ -529,8 +529,8 @@ async function viewPR(id){
       <div class="fld"><label>Priority</label><select id="pPri" ${editable?"":"disabled"}>${["Normal","Urgent","Critical"].map(p=>`<option ${p===pr.priority?"selected":""}>${p}</option>`).join("")}</select></div>
     </div>
     <div class="fld" style="margin-top:12px"><label>Purpose / justification</label><textarea id="pPurpose" ${editable?"":"disabled"}>${esc(pr.purpose||"")}</textarea></div></div>
-    <div class="card"><div class="toolbar"><h3 style="margin:0">Items</h3><div class="sp"></div>${editable?`<button class="btn sm" id="bAddLine">＋ Add line</button><button class="btn sm" id="bReqItem">Item not in master? Request new item</button>`:""}</div>
-      <div class="tbl-wrap"><table class="t" id="prLines"><thead><tr><th>#</th><th style="min-width:260px">Item (from Item Master)</th><th>UOM</th><th class="num">Qty</th><th class="num">Est. unit cost</th><th class="num">Amount</th><th>Remarks</th>${editable?"<th></th>":""}</tr></thead><tbody></tbody>
+    <div class="card"><div class="toolbar"><h3 style="margin:0">Items</h3><div class="sp"></div>${editable?`<button class="btn sm" id="bAddLine">＋ Add line</button><button class="btn sm" id="bReqItem">Item not in ${esc(pr.purchase_type)} Item Master? Request new item</button>`:""}</div>
+      <div class="tbl-wrap"><table class="t" id="prLines"><thead><tr><th>#</th><th style="min-width:260px">Item (from ${esc(pr.purchase_type)} Item Master)</th><th>UOM</th><th class="num">Qty</th><th class="num">Est. unit cost</th><th class="num">Amount</th><th>Remarks</th>${editable?"<th></th>":""}</tr></thead><tbody></tbody>
       <tfoot><tr><td colspan="5" class="right">Estimated total</td><td class="num" id="prTot"></td><td colspan="${editable?2:1}"></td></tr></tfoot></table></div></div>
     ${(cvs||[]).length||(pos||[]).length?`<div class="card"><h3>Linked documents</h3><ul class="trail">
       ${(cvs||[]).map(c=>`<li><a href="#cv-edit/${c.id}">${esc(c.cv_no)}</a> Canvass ${badge(c.status)}</li>`).join("")}
@@ -560,7 +560,7 @@ async function viewPR(id){
       if(e.target.classList.contains("li-item")){
         const it = itemFromText(e.target.value, pr.purchase_type);
         if(it){ l.item_id=it.id; l.description=it.description; l.uom=it.uom; if(!num(l.est_unit_cost)) l.est_unit_cost=it.last_price||0; }
-        else { l.item_id=null; l.description=e.target.value; toast(`Pick an item from the Item Master that is allowed for ${pr.purchase_type}. If it is missing, request a new item.`,"err"); }
+        else { l.item_id=null; l.description=e.target.value; toast(`Pick an item from the ${pr.purchase_type} Item Master. If it is missing, request a new item.`,"err"); }
         setTimeout(draw,0);
       }
     });
@@ -574,12 +574,12 @@ async function viewPR(id){
     });
     tbody.addEventListener("click", e=>{ if(e.target.classList.contains("li-del")){ L.splice(+e.target.closest("tr").dataset.i,1); draw(); }});
     $("#bAddLine").onclick = ()=>{ L.push({item_id:null,description:"",uom:"",qty:"",est_unit_cost:"",remarks:""}); draw(); $$(".li-item").pop()?.focus(); };
-    $("#bReqItem").onclick = ()=>masterRequestForm("item","create");
+    $("#bReqItem").onclick = ()=>masterRequestForm("item","create",null,pr.purchase_type);
     $("#pCo").onchange = ()=>{ pr.company_id=$("#pCo").value; $("#pDept").innerHTML=`<option value="">—</option>`+deptOpts(pr.company_id); };
     const save = async ()=>{
       const t=pr.purchase_type;
       const bad = L.find(l=>!l.item_id); if(bad) throw new Error("Every line must use an item from the Item Master.");
-      const badT = L.find(l=>!itemOk(S.items.find(i=>i.id===l.item_id)||{},t)); if(badT) throw new Error(`"${badT.description}" is not allowed for a ${t} purchase.`);
+      const badT = L.find(l=>!itemOk(S.items.find(i=>i.id===l.item_id)||{},t)); if(badT) throw new Error(`"${badT.description}" is not in the ${t} Item Master.`);
       if(L.some(l=>num(l.qty)<=0)) throw new Error("Quantity must be more than zero.");
       const head = {company_id:$("#pCo").value, department_id:$("#pDept").value||null, date_needed:$("#pNeed").value||null, priority:$("#pPri").value, purpose:$("#pPurpose").value.trim()};
       let pid = pr.id;
@@ -905,37 +905,39 @@ async function viewRR(id){
 // MASTER DATA (Item / Supplier) — changes approved by Module Admin
 // =====================================================================
 const MF = {
-  item:[{k:"code",l:"Item code (blank = auto)"},{k:"description",l:"Description",req:true},{k:"purchase_type",l:"Purchase type",opt:["Both","Trade","Non-Trade"]},{k:"uom",l:"Unit of measure",req:true},{k:"category",l:"Category"},{k:"specs",l:"Specifications",ta:true},{k:"last_price",l:"Reference price",n:true}],
+  item:[{k:"code",l:"Item code (blank = auto)"},{k:"description",l:"Description",req:true},{k:"uom",l:"Unit of measure",req:true},{k:"category",l:"Category"},{k:"specs",l:"Specifications",ta:true},{k:"last_price",l:"Reference price",n:true}],
   supplier:[{k:"code",l:"Supplier code (blank = auto)"},{k:"name",l:"Supplier name",req:true},{k:"tin",l:"TIN"},{k:"address",l:"Address",ta:true},{k:"contact_person",l:"Contact person"},{k:"phone",l:"Phone"},{k:"email",l:"Email"},{k:"payment_terms",l:"Payment terms"},{k:"vat_type",l:"VAT type",opt:["VAT","NON-VAT"]},{k:"category",l:"Category"}],
 };
 async function viewMaster(kind, m){
   await refreshMasters();
-  const isItem = kind==="item"; const T = isItem ? null : modOf(m);
-  const list = isItem ? S.items : S.suppliers.filter(s=>s.purchase_type===T);
-  if(T) setTitle(T, "Supplier Master");
+  const isItem = kind==="item"; const T = modOf(m);
+  const list = (isItem ? S.items : S.suppliers).filter(s=>s.purchase_type===T);
+  setTitle(T, isItem ? "Item Master" : "Supplier Master");
+  const base = isItem ? "items" : "suppliers";
   $("#topActions").innerHTML = `${isAdmin()?`<button class="btn" id="mImp">⭱ Import Excel</button>`:""}<button class="btn" id="mExp">⭳ Excel</button>
-    ${S.me.role!=="viewer"?`<button class="btn pri" id="mNew">＋ ${isAdmin()?"Add":"Request new"} ${isItem?"item":T+" supplier"}</button>`:""}`;
+    ${S.me.role!=="viewer"?`<button class="btn pri" id="mNew">＋ ${isAdmin()?"Add":"Request new"} ${T} ${isItem?"item":"supplier"}</button>`:""}`;
   const {data:pend} = await sb.from("pur_master_requests").select("target_id").eq("kind",kind).eq("status","pending");
   const pendSet = new Set((pend||[]).map(p=>p.target_id));
   $("#view").innerHTML = `
-    <div class="note info">${isItem?"Item Master":`<b>${T}</b> Supplier Master`} is controlled by the <b>Module Admin</b>. ${isAdmin()?"As Module Admin your changes apply immediately; requests from other users wait in <a href='#mreq'>Master Data Requests</a>.":"Your additions and changes are sent to the Module Admin for approval before they can be used."}</div>
+    <div class="row" style="margin-bottom:12px">${myTypes().map(t=>`<button class="btn ${t===T?"pri":""}" onclick="go('${base}/${mc(t)}')">${t} ${isItem?"Items":"Suppliers"}</button>`).join("")}</div>
+    <div class="note info"><b>${T}</b> ${isItem?"Item":"Supplier"} Master is controlled by the <b>Module Admin</b>. ${isAdmin()?"As Module Admin your changes apply immediately; requests from other users wait in <a href='#mreq'>Master Data Requests</a>.":"Your additions and changes are sent to the Module Admin for approval before they can be used."}</div>
     <div class="filters"><input class="inp" id="mQ" placeholder="Search…" style="min-width:260px"><select class="inp" id="mSt"><option value="active">Active</option><option value="inactive">Inactive</option><option value="">All</option></select></div>
     <div id="mTbl"></div>`;
-  const cols = isItem ? ["code","description","purchase_type","uom","category","last_price"] : ["code","name","tin","contact_person","phone","payment_terms","vat_type"];
-  const heads = isItem ? ["Code","Description","Type","UOM","Category","Ref. price"] : ["Code","Name","TIN","Contact","Phone","Terms","VAT"];
+  const cols = isItem ? ["code","description","uom","category","last_price"] : ["code","name","tin","contact_person","phone","payment_terms","vat_type"];
+  const heads = isItem ? ["Code","Description","UOM","Category","Ref. price"] : ["Code","Name","TIN","Contact","Phone","Terms","VAT"];
   const draw = ()=>{
     const q=$("#mQ").value.trim().toLowerCase(), st=$("#mSt").value;
     const rows = list.filter(r=>(!st||r.status===st) && (!q || cols.some(c=>String(r[c]??"").toLowerCase().includes(q))));
     $("#mTbl").innerHTML = rows.length ? `<div class="tbl-wrap"><table class="t"><thead><tr>${heads.map(h=>`<th>${h}</th>`).join("")}<th>Status</th><th></th></tr></thead><tbody>
       ${rows.slice(0,1000).map(r=>`<tr>${cols.map(c=>`<td class="${c==="last_price"?"num":""}">${c==="last_price"?money(r[c]):esc(r[c])}</td>`).join("")}<td>${badge(r.status)} ${pendSet.has(r.id)?'<span class="badge b-pending">change pending</span>':""}</td>
-        <td class="row" style="flex-wrap:nowrap">${S.me.role!=="viewer"&&!pendSet.has(r.id)?`<button class="btn sm" data-ed="${r.id}">${isAdmin()?"Edit":"Request change"}</button><button class="btn sm ${r.status==="active"?"warn":""}" data-tg="${r.id}">${r.status==="active"?"Deactivate":"Activate"}</button>`:""}</td></tr>`).join("")}
-      </tbody></table></div>${rows.length>1000?`<div class="small muted">Showing first 1000 of ${rows.length}. Refine your search.</div>`:""}` : `<div class="card empty">No records.</div>`;
+        <td>${S.me.role!=="viewer"&&!pendSet.has(r.id)?`<div class="row" style="flex-wrap:nowrap"><button class="btn sm" data-ed="${r.id}">${isAdmin()?"Edit":"Request change"}</button><button class="btn sm ${r.status==="active"?"warn":""}" data-tg="${r.id}">${r.status==="active"?"Deactivate":"Activate"}</button></div>`:""}</td></tr>`).join("")}
+      </tbody></table></div>${rows.length>1000?`<div class="small muted">Showing first 1000 of ${rows.length}. Refine your search.</div>`:""}` : `<div class="card empty">${list.length?"No records match your search / status filter.":`No ${T} ${isItem?"items":"suppliers"} yet. ${S.me.role==="viewer"?"":`Click <b>＋ ${isAdmin()?"Add":"Request new"}</b> above${isAdmin()?" or <b>Import Excel</b>":""} to add the first one.`}`}</div>`;
     $$("[data-ed]").forEach(b=>b.onclick=()=>masterRequestForm(kind,"update",list.find(r=>r.id===b.dataset.ed),T));
     $$("[data-tg]").forEach(b=>b.onclick=()=>{ const r=list.find(x=>x.id===b.dataset.tg); masterToggle(kind,r); });
   };
   $("#mQ").oninput=draw; $("#mSt").onchange=draw; draw();
   if($("#mNew")) $("#mNew").onclick=()=>masterRequestForm(kind,"create",null,T);
-  $("#mExp").onclick=()=>exportXlsx(list.map(r=>Object.fromEntries(MF[kind].map(f=>[f.k,r[f.k]]).concat([["status",r.status]]))), isItem?"Item_Master":T.replace("-","")+"_Supplier_Master");
+  $("#mExp").onclick=()=>exportXlsx(list.map(r=>Object.fromEntries(MF[kind].map(f=>[f.k,r[f.k]]).concat([["status",r.status]]))), T.replace("-","")+(isItem?"_Item_Master":"_Supplier_Master"));
   if($("#mImp")) $("#mImp").onclick=()=>masterImport(kind,T);
 }
 async function masterToggle(kind, r){
@@ -952,8 +954,9 @@ async function masterToggle(kind, r){
 function masterRequestForm(kind, action, rec, T){
   const f = MF[kind]; const isItem = kind==="item"; const direct = isAdmin();
   T = T || rec?.purchase_type;
-  const val = k => rec ? (rec[k]??"") : (k==="vat_type"?"VAT":k==="uom"?"PC":k==="purchase_type"?"Both":"");
-  modal({title:`${direct?(action==="create"?"Add":"Edit"):(action==="create"?"Request new":"Request change to")} ${isItem?"item":T+" supplier"}`,
+  if(!T) return toast("Open the Trade or Non-Trade master first.","err");
+  const val = k => rec ? (rec[k]??"") : (k==="vat_type"?"VAT":k==="uom"?"PC":"");
+  modal({title:`${direct?(action==="create"?"Add":"Edit"):(action==="create"?"Request new":"Request change to")} ${T} ${isItem?"item":"supplier"}`,
     body:`${direct?"":`<div class="note info">This request goes to the Module Admin. The ${isItem?"item":"supplier"} can be used once approved.</div>`}
       <div class="grid">${f.map(x=>`<div class="fld" ${x.ta?'style="grid-column:1/-1"':""}><label>${esc(x.l)}${x.req?" *":""}</label>${
         x.opt?`<select data-k="${x.k}">${x.opt.map(o=>`<option ${o===val(x.k)?"selected":""}>${o}</option>`).join("")}</select>`
@@ -964,7 +967,7 @@ function masterRequestForm(kind, action, rec, T){
     onOpen:(el,close)=>{ $("#mrOk",el).onclick=async()=>{
       const p={}; $$("[data-k]",el).forEach(i=>{ if(!i.disabled) p[i.dataset.k]=i.value.trim(); });
       if(isItem && p.uom) p.uom=p.uom.toUpperCase();
-      if(!isItem && action==="create") p.purchase_type = T;
+      if(action==="create") p.purchase_type = T;
       const miss=f.find(x=>x.req&&!p[x.k]); if(miss) return toast(miss.l+" is required.","err");
       if(direct){
         const tbl = isItem?"pur_items":"pur_suppliers"; if(p.last_price!==undefined) p.last_price=num(p.last_price);
@@ -981,17 +984,17 @@ function masterRequestForm(kind, action, rec, T){
 }
 function masterImport(kind, T){
   const f = MF[kind];
-  modal({title:`Import ${kind==="item"?"items":T+" suppliers"} from Excel`, body:`<div class="note info">Columns (first row = headers): <b>${f.map(x=>x.k).join(", ")}</b>. Rows whose <b>code</b> already exists are updated; others are added (blank code = auto).</div>
+  modal({title:`Import ${T} ${kind==="item"?"items":"suppliers"} from Excel`, body:`<div class="note info">Columns (first row = headers): <b>${f.map(x=>x.k).join(", ")}</b>. Rows whose <b>code</b> already exists are updated; others are added (blank code = auto).</div>
     <input type="file" id="impF" accept=".xlsx,.xls,.csv"><div id="impP" class="small muted" style="margin-top:10px"></div>
     <div style="margin-top:10px"><button class="btn sm" id="impT">⭳ Download template</button></div>`,
     foot:`<button class="btn" data-close>Cancel</button><button class="btn pri" id="impOk" disabled>Import</button>`,
     onOpen:(el,close)=>{ let rows=[];
-      $("#impT",el).onclick=()=>exportXlsx([Object.fromEntries(f.map(x=>[x.k,""]))], kind+"_template");
+      $("#impT",el).onclick=()=>exportXlsx([Object.fromEntries(f.map(x=>[x.k,""]))], T.replace("-","")+"_"+kind+"_template");
       $("#impF",el).onchange=async e=>{ const file=e.target.files[0]; if(!file) return; const wb=XLSX.read(await file.arrayBuffer()); rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:""});
         rows=rows.map(r=>{ const o={}; Object.keys(r).forEach(k=>o[k.trim().toLowerCase().replace(/\s+/g,"_")]=String(r[k]).trim()); return o; }).filter(r=>kind==="item"?r.description:r.name);
         $("#impP",el).textContent=rows.length+" valid row(s) found."; $("#impOk",el).disabled=!rows.length; };
-      $("#impOk",el).onclick=async()=>{ const tbl=kind==="item"?"pur_items":"pur_suppliers"; const list=kind==="item"?S.items:S.suppliers.filter(x=>x.purchase_type===T); let ins=[],upd=0;
-        await run(async()=>{ for(const r of rows){ const p={}; f.forEach(x=>{ if(r[x.k]!==undefined&&r[x.k]!=="") p[x.k]=x.n?num(r[x.k]):r[x.k]; }); if(p.uom) p.uom=p.uom.toUpperCase(); if(p.code) p.code=p.code.toUpperCase(); if(kind==="supplier") p.purchase_type=T;
+      $("#impOk",el).onclick=async()=>{ const tbl=kind==="item"?"pur_items":"pur_suppliers"; const list=(kind==="item"?S.items:S.suppliers).filter(x=>x.purchase_type===T); let ins=[],upd=0;
+        await run(async()=>{ for(const r of rows){ const p={}; f.forEach(x=>{ if(r[x.k]!==undefined&&r[x.k]!=="") p[x.k]=x.n?num(r[x.k]):r[x.k]; }); if(p.uom) p.uom=p.uom.toUpperCase(); if(p.code) p.code=p.code.toUpperCase(); p.purchase_type=T;
             const ex=p.code&&list.find(x=>x.code===p.code); if(ex){ chk(await sb.from(tbl).update(p).eq("id",ex.id)); upd++; } else ins.push(p); }
           for(let i=0;i<ins.length;i+=500) chk(await sb.from(tbl).insert(ins.slice(i,i+500))); });
         toast(`${ins.length} added, ${upd} updated.`,"ok"); close(); route(); };
@@ -1002,7 +1005,7 @@ async function viewMasterRequests(){
   const pend = rows.filter(r=>r.status==="pending"), done = rows.filter(r=>r.status!=="pending");
   const tgt = r => { const l = r.kind==="item"?S.items:S.suppliers; return l.find(x=>x.id===(r.target_id||r.result_id)); };
   const title = r => { const t=tgt(r); return r.kind==="item" ? (r.payload.description || t?.description || "") : (r.payload.name || t?.name || ""); };
-  const row = r => `<tr class="click" data-r="${r.id}"><td class="bold">${esc(r.req_no)}</td><td>${r.kind==="item"?"Item":"Supplier "+ptype(r.payload.purchase_type||tgt(r)?.purchase_type)}</td><td>${esc(r.action)}</td><td>${esc(title(r))}</td><td>${esc(pname(r.requested_by))}</td><td>${dt(r.requested_at)}</td><td>${badge(r.status)}</td></tr>`;
+  const row = r => `<tr class="click" data-r="${r.id}"><td class="bold">${esc(r.req_no)}</td><td>${r.kind==="item"?"Item":"Supplier"} ${ptype(r.payload.purchase_type||tgt(r)?.purchase_type)}</td><td>${esc(r.action)}</td><td>${esc(title(r))}</td><td>${esc(pname(r.requested_by))}</td><td>${dt(r.requested_at)}</td><td>${badge(r.status)}</td></tr>`;
   const tbl = rs => `<div class="tbl-wrap"><table class="t"><thead><tr><th>Req No.</th><th>Type</th><th>Action</th><th>Record</th><th>Requested by</th><th>Date</th><th>Status</th></tr></thead><tbody>${rs.map(row).join("")}</tbody></table></div>`;
   $("#view").innerHTML = `<div class="card"><h3>${isAdmin()?"Waiting for Module Admin approval":"My pending requests"} (${pend.length})</h3>${pend.length?tbl(pend):`<div class="empty">Nothing pending.</div>`}</div>
     <div class="card"><h3>History</h3>${done.length?tbl(done):`<div class="muted small">—</div>`}</div>`;

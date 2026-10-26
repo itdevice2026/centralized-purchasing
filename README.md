@@ -8,9 +8,9 @@ Trade (goods for resale / production) and Non-Trade (supplies, services, assets)
 - Separate numbering: `PR-T-MTC-2026-00001` / `PR-N-…`, `CV-T/N`, `PO-T/N`, `RR-T/N`; suppliers `SUP-T-00001` / `SUP-N-00001`.
 - Each user has **Module access**: Trade only, Non-Trade only, or both — managed in **Module Admin → Module Users** (Trade team / Non-Trade team, one-click toggles). Users only see documents and suppliers of their modules; approvers still see what is routed to them.
 - POs, canvasses and receiving reports inherit the module of their PR; a document's module never changes.
-- A supplier belongs to one module; a canvass / PO only accepts active suppliers of the same module.
+- Each supplier and item belongs to one module (it can't be moved); a canvass / PO only accepts active suppliers of the same module.
 - Approval Matrix steps apply to **All**, **Trade** or **Non-Trade**.
-- The **Item Master** is shared; items are tagged Both / Trade / Non-Trade and a PR only accepts items allowed in its module.
+- **Item Master** is also separate per module (`ITM-T-00001` / `ITM-N-00001`); PR and PO lines only accept items of the document's module.
 
 ## Workflow
 1. **Purchase Requisition (PR)** — requester picks items from the Item Master, submits.
@@ -34,7 +34,7 @@ Item Master and Supplier Master are controlled by the **Module Admin**. Other us
 Anyone listed in the Approval Matrix can approve, whatever their role.
 
 ## Document numbers
-`PR-T-MTC-2026-00001` (Trade) / `PR-N-MTC-2026-00001` (Non-Trade), same for CV, PO, RR — per module, company and year; items `ITM-00001`; suppliers `SUP-T-00001` / `SUP-N-00001`.
+`PR-T-MTC-2026-00001` (Trade) / `PR-N-MTC-2026-00001` (Non-Trade), same for CV, PO, RR — per module, company and year; items `ITM-T-00001` / `ITM-N-00001`; suppliers `SUP-T-00001` / `SUP-N-00001`.
 
 ## Backend
 - `supabase/migrations/*.sql` — schema, RLS, workflow functions (already applied to `bom-system`).
