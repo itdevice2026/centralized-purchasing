@@ -82,7 +82,8 @@ table.t td.bold{white-space:nowrap}
 .b-approved,.b-awarded,.b-received,.b-closed,.b-active{background:var(--green-l);color:var(--green)}
 .b-rejected,.b-cancelled,.b-inactive{background:var(--red-l);color:var(--red)}
 .b-canvassing,.b-sent,.b-partial{background:var(--blue-l);color:var(--blue)}
-.b-ordered{background:var(--violet-l);color:var(--violet)}.b-skipped{background:var(--gray-l);color:var(--muted)}
+.b-ordered{background:var(--violet-l);color:var(--violet)}
+.b-trade{background:#ffedd5;color:#9a3412;text-transform:none}.b-nontrade{background:#e0f2fe;color:#075985;text-transform:none}.b-skipped{background:var(--gray-l);color:var(--muted)}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px}
 .kpi{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px 16px;cursor:pointer}
 .kpi:hover{border-color:#fca5a5}
@@ -184,6 +185,8 @@ const d8 = v => v ? new Date(v).toLocaleDateString("en-PH",{year:"numeric",month
 const dt = v => v ? new Date(v).toLocaleString("en-PH",{year:"numeric",month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit"}) : "";
 const today = () => new Date(Date.now()+8*3600e3).toISOString().slice(0,10);
 const badge = s => `<span class="badge b-${esc(s)}">${esc(s)}</span>`;
+const ptype = t => t ? `<span class="badge ${t==="Trade"?"b-trade":"b-nontrade"}">${esc(t)}</span>` : "";
+const PTYPES = ["Trade","Non-Trade"];
 const isAdmin = () => S.me?.role === "admin";
 const isPurch = () => ["admin","purchasing"].includes(S.me?.role);
 const canRequest = () => ["admin","purchasing","requester"].includes(S.me?.role);
@@ -441,6 +444,7 @@ async function viewPRList(){
   $("#view").innerHTML = `
     <div class="filters">
       <select class="inp" id="fCo"><option value="">All companies</option>${myCompanies().map(c=>`<option value="${c.id}">${esc(c.code)} — ${esc(c.name)}</option>`).join("")}</select>
+      <select class="inp" id="fTy"><option value="">Trade &amp; Non-Trade</option>${PTYPES.map(t=>`<option>${t}</option>`).join("")}</select>
       <select class="inp" id="fSt"><option value="">All status</option>${["draft","pending","approved","rejected","canvassing","ordered","closed","cancelled"].map(s=>`<option>${s}</option>`).join("")}</select>
       <select class="inp" id="fMine"><option value="">Everyone</option><option value="1">Only mine</option></select>
       <input class="inp" id="fQ" placeholder="Search PR no. / purpose">
@@ -452,26 +456,28 @@ async function viewPRList(){
     if($("#fCo").value) q=q.eq("company_id",$("#fCo").value);
     if($("#fSt").value) q=q.eq("status",$("#fSt").value);
     if($("#fMine").value) q=q.eq("requested_by",S.user.id);
+    if($("#fTy").value) q=q.eq("purchase_type",$("#fTy").value);
     const t=$("#fQ").value.trim(); if(t) q=q.or(`pr_no.ilike.%${t}%,purpose.ilike.%${t}%`);
     rows = chk(await q);
-    $("#prTbl").innerHTML = rows.length ? `<div class="tbl-wrap"><table class="t"><thead><tr><th>PR No.</th><th>Company</th><th>Department</th><th>Requested by</th><th>Date</th><th>Needed</th><th>Priority</th><th class="num">Est. Total</th><th>Status</th></tr></thead><tbody>
-      ${rows.map(r=>`<tr class="click" onclick="go('pr-edit/${r.id}')"><td class="bold">${esc(r.pr_no)}</td><td>${esc(r.company?.code)}</td><td>${esc(r.dept?.name||"")}</td><td>${esc(pname(r.requested_by))}</td><td>${d8(r.request_date)}</td><td>${d8(r.date_needed)}</td><td>${esc(r.priority)}</td><td class="num">${money(r.total)}</td><td>${badge(r.status)}</td></tr>`).join("")}
+    $("#prTbl").innerHTML = rows.length ? `<div class="tbl-wrap"><table class="t"><thead><tr><th>PR No.</th><th>Type</th><th>Company</th><th>Department</th><th>Requested by</th><th>Date</th><th>Needed</th><th>Priority</th><th class="num">Est. Total</th><th>Status</th></tr></thead><tbody>
+      ${rows.map(r=>`<tr class="click" onclick="go('pr-edit/${r.id}')"><td class="bold">${esc(r.pr_no)}</td><td>${ptype(r.purchase_type)}</td><td>${esc(r.company?.code)}</td><td>${esc(r.dept?.name||"")}</td><td>${esc(pname(r.requested_by))}</td><td>${d8(r.request_date)}</td><td>${d8(r.date_needed)}</td><td>${esc(r.priority)}</td><td class="num">${money(r.total)}</td><td>${badge(r.status)}</td></tr>`).join("")}
       </tbody></table></div>` : `<div class="card empty">No purchase requisitions found.</div>`;
   };
-  ["fCo","fSt","fMine"].forEach(i=>$("#"+i).onchange=load); let tm; $("#fQ").oninput=()=>{clearTimeout(tm);tm=setTimeout(load,350);};
-  $("#fX").onclick=()=>exportXlsx(rows.map(r=>({PR_No:r.pr_no,Company:r.company?.code,Department:r.dept?.name,Requested_By:pname(r.requested_by),Date:r.request_date,Date_Needed:r.date_needed,Priority:r.priority,Purpose:r.purpose,Est_Total:Number(r.total),Status:r.status})),"PR_List");
+  ["fCo","fSt","fMine","fTy"].forEach(i=>$("#"+i).onchange=load); let tm; $("#fQ").oninput=()=>{clearTimeout(tm);tm=setTimeout(load,350);};
+  $("#fX").onclick=()=>exportXlsx(rows.map(r=>({PR_No:r.pr_no,Type:r.purchase_type,Company:r.company?.code,Department:r.dept?.name,Requested_By:pname(r.requested_by),Date:r.request_date,Date_Needed:r.date_needed,Priority:r.priority,Purpose:r.purpose,Est_Total:Number(r.total),Status:r.status})),"PR_List");
   await load();
 }
 
-function itemDatalist(){ return `<datalist id="dlItems">${S.items.filter(i=>i.status==="active").map(i=>`<option value="${esc(i.code)} — ${esc(i.description)}"></option>`).join("")}</datalist>`; }
-function itemFromText(v){ const code = String(v||"").split(" — ")[0].trim().toUpperCase(); return S.items.find(i=>i.code===code && i.status==="active"); }
+function itemOk(i, t){ return i.status==="active" && (!t || i.purchase_type==="Both" || i.purchase_type===t); }
+function itemDatalist(t){ return `<datalist id="dlItems">${S.items.filter(i=>itemOk(i,t)).map(i=>`<option value="${esc(i.code)} — ${esc(i.description)}"></option>`).join("")}</datalist>`; }
+function itemFromText(v, t){ const code = String(v||"").split(" — ")[0].trim().toUpperCase(); return S.items.find(i=>i.code===code && itemOk(i,t)); }
 
 async function viewPR(id){
   let pr, lines=[];
   if(id==="new"){
     if(!canRequest()) throw new Error("You cannot create PRs.");
     const cos = myCompanies(); if(!cos.length) throw new Error("You are not assigned to any company. Ask the Module Admin.");
-    pr = {id:null, status:"draft", company_id:cos[0].id, request_date:today(), priority:"Normal", requested_by:S.user.id, purpose:"", date_needed:"", department_id:null, total:0};
+    pr = {id:null, status:"draft", purchase_type:"", company_id:cos[0].id, request_date:today(), priority:"Normal", requested_by:S.user.id, purpose:"", date_needed:"", department_id:null, total:0};
   } else {
     pr = chk(await sb.from("pur_requisitions").select(PR_SEL).eq("id",id).single());
     lines = chk(await sb.from("pur_pr_lines").select("*").eq("pr_id",id).order("line_no"));
@@ -485,8 +491,8 @@ async function viewPR(id){
 
   const deptOpts = co => S.depts.filter(d=>d.company_id===co && d.active).map(d=>`<option value="${d.id}" ${d.id===pr.department_id?"selected":""}>${esc(d.name)}</option>`).join("");
   $("#view").innerHTML = `
-    ${itemDatalist()}
-    <div class="doc-head"><div><h3>${pr.id?esc(pr.pr_no):"New Purchase Requisition"}</h3><div class="muted small">${pr.id?`Requested by ${esc(pname(pr.requested_by))} · ${d8(pr.request_date)}`:""}</div></div>${pr.id?badge(pr.status):""}<div class="sp"></div>
+    <span id="dlWrap">${itemDatalist(pr.purchase_type)}</span>
+    <div class="doc-head"><div><h3>${pr.id?esc(pr.pr_no):"New Purchase Requisition"} ${ptype(pr.purchase_type)}</h3><div class="muted small">${pr.id?`Requested by ${esc(pname(pr.requested_by))} · ${d8(pr.request_date)}`:""}</div></div>${pr.id?badge(pr.status):""}<div class="sp"></div>
       <div class="row">
         ${approveButtons(myAppr)}
         ${editable?`<button class="btn" id="bSave">💾 Save draft</button><button class="btn pri" id="bSubmit">➤ Submit for approval</button>`:""}
@@ -497,6 +503,7 @@ async function viewPR(id){
       </div></div>
     ${pr.status==="rejected"?`<div class="note">This PR was <b>rejected</b>. Edit it and submit again.</div>`:""}
     <div class="card"><div class="grid">
+      <div class="fld"><label>Purchase type *</label><select id="pType" ${editable?"":"disabled"}>${pr.purchase_type?"":'<option value="">— select —</option>'}${PTYPES.map(t=>`<option ${t===pr.purchase_type?"selected":""}>${t}</option>`).join("")}</select></div>
       <div class="fld"><label>Company</label><select id="pCo" ${editable&&!pr.id?"":"disabled"}>${myCompanies().concat(pr.id&&!myCompanies().some(c=>c.id===pr.company_id)?[comp(pr.company_id)]:[]).map(c=>`<option value="${c.id}" ${c.id===pr.company_id?"selected":""}>${esc(c.code)} — ${esc(c.name)}</option>`).join("")}</select></div>
       <div class="fld"><label>Department</label><select id="pDept" ${editable?"":"disabled"}><option value="">—</option>${deptOpts(pr.company_id)}</select></div>
       <div class="fld"><label>Date needed</label><input type="date" id="pNeed" value="${esc(pr.date_needed||"")}" ${editable?"":"disabled"}></div>
@@ -532,9 +539,10 @@ async function viewPR(id){
     tbody.addEventListener("change", e=>{
       const tr=e.target.closest("tr"); if(!tr) return; const l=L[+tr.dataset.i];
       if(e.target.classList.contains("li-item")){
-        const it = itemFromText(e.target.value);
+        if(!$("#pType").value){ toast("Choose the purchase type (Trade / Non-Trade) first.","err"); e.target.value=""; return; }
+        const it = itemFromText(e.target.value, $("#pType").value);
         if(it){ l.item_id=it.id; l.description=it.description; l.uom=it.uom; if(!num(l.est_unit_cost)) l.est_unit_cost=it.last_price||0; }
-        else { l.item_id=null; l.description=e.target.value; toast("Pick an item from the Item Master list. If it is missing, request a new item.","err"); }
+        else { l.item_id=null; l.description=e.target.value; toast(`Pick an item from the Item Master that is allowed for ${$("#pType").value}. If it is missing, request a new item.`,"err"); }
         setTimeout(draw,0);
       }
     });
@@ -549,11 +557,18 @@ async function viewPR(id){
     tbody.addEventListener("click", e=>{ if(e.target.classList.contains("li-del")){ L.splice(+e.target.closest("tr").dataset.i,1); draw(); }});
     $("#bAddLine").onclick = ()=>{ L.push({item_id:null,description:"",uom:"",qty:"",est_unit_cost:"",remarks:""}); draw(); $$(".li-item").pop()?.focus(); };
     $("#bReqItem").onclick = ()=>masterRequestForm("item","create");
+    $("#pType").onchange = ()=>{
+      const t=$("#pType").value; $("#dlWrap").innerHTML=itemDatalist(t);
+      const bad=L.filter(l=>l.item_id && !itemOk(S.items.find(i=>i.id===l.item_id)||{},t));
+      if(bad.length) toast(`${bad.length} line(s) have items not allowed for ${t}: `+bad.map(b=>b.description).join(", "),"err");
+    };
     $("#pCo").onchange = ()=>{ pr.company_id=$("#pCo").value; $("#pDept").innerHTML=`<option value="">—</option>`+deptOpts(pr.company_id); };
     const save = async ()=>{
+      const t=$("#pType").value; if(!t) throw new Error("Choose the purchase type (Trade / Non-Trade).");
       const bad = L.find(l=>!l.item_id); if(bad) throw new Error("Every line must use an item from the Item Master.");
+      const badT = L.find(l=>!itemOk(S.items.find(i=>i.id===l.item_id)||{},t)); if(badT) throw new Error(`"${badT.description}" is not allowed for a ${t} purchase.`);
       if(L.some(l=>num(l.qty)<=0)) throw new Error("Quantity must be more than zero.");
-      const head = {company_id:$("#pCo").value, department_id:$("#pDept").value||null, date_needed:$("#pNeed").value||null, priority:$("#pPri").value, purpose:$("#pPurpose").value.trim()};
+      const head = {purchase_type:t, company_id:$("#pCo").value, department_id:$("#pDept").value||null, date_needed:$("#pNeed").value||null, priority:$("#pPri").value, purpose:$("#pPurpose").value.trim()};
       let pid = pr.id;
       if(!pid){ pid = chk(await sb.from("pur_requisitions").insert({...head, requested_by:S.user.id}).select("id").single()).id; }
       else chk(await sb.from("pur_requisitions").update(head).eq("id",pid));
@@ -604,9 +619,9 @@ async function viewApprovals(){
   const {data:hist} = await sb.from("pur_approvals").select("*").eq("approver_id",S.user.id).in("status",["approved","rejected"]).order("acted_at",{ascending:false}).limit(30);
   $("#view").innerHTML = `
     <div class="card"><h3>Waiting for my decision (${ready.length})</h3>
-    ${ready.length?`<div class="tbl-wrap"><table class="t"><thead><tr><th>Type</th><th>Doc No.</th><th>Company</th><th>Details</th><th>Step</th><th class="num">Amount</th><th>Submitted</th><th></th></tr></thead><tbody>
+    ${ready.length?`<div class="tbl-wrap"><table class="t"><thead><tr><th>Doc</th><th>Doc No.</th><th>Purchase</th><th>Company</th><th>Details</th><th>Step</th><th class="num">Amount</th><th>Submitted</th><th></th></tr></thead><tbody>
       ${ready.map(a=>{ const d=docs[a.doc_id]||{}; const isPR=a.doc_type==="PR";
-        return `<tr><td><span class="badge ${isPR?"b-pending":"b-sent"}">${a.doc_type}</span></td><td class="bold"><a href="#${isPR?"pr-edit":"po-edit"}/${a.doc_id}">${esc(isPR?d.pr_no:d.po_no)}</a></td><td>${esc(d.company?.code||"")}</td>
+        return `<tr><td><span class="badge ${isPR?"b-pending":"b-sent"}">${a.doc_type}</span></td><td class="bold"><a href="#${isPR?"pr-edit":"po-edit"}/${a.doc_id}">${esc(isPR?d.pr_no:d.po_no)}</a></td><td>${ptype(d.purchase_type)}</td><td>${esc(d.company?.code||"")}</td>
         <td>${isPR?`${esc(pname(d.requested_by))} — ${esc((d.purpose||"").slice(0,60))}`:esc(d.supplier?.name||"")}</td><td>${a.step_no} ${esc(a.step_name)}</td><td class="num">${money(d.total)}</td><td>${dt(d.submitted_at)}</td>
         <td class="row"><button class="btn sm ok" data-a="${a.id}" data-d="approve">Approve</button><button class="btn sm warn" data-a="${a.id}" data-d="reject">Reject</button></td></tr>`;}).join("")}
       </tbody></table></div>`:`<div class="empty">Nothing waiting for you. 🎉</div>`}</div>
@@ -619,15 +634,15 @@ async function viewApprovals(){
 // CANVASS / RFQ
 // =====================================================================
 async function viewCVList(){
-  const rows = chk(await sb.from("pur_canvasses").select("*, company:pur_companies(code), pr:pur_requisitions(pr_no,purpose)").order("created_at",{ascending:false}).limit(300));
+  const rows = chk(await sb.from("pur_canvasses").select("*, company:pur_companies(code), pr:pur_requisitions(pr_no,purpose,purchase_type)").order("created_at",{ascending:false}).limit(300));
   const {data:toDo} = await sb.from("pur_requisitions").select(PR_SEL).eq("status","approved").order("approved_at");
   $("#view").innerHTML = `
     <div class="card"><h3>Approved PRs ready for canvass (${(toDo||[]).length})</h3>
-      ${(toDo||[]).length?`<div class="tbl-wrap"><table class="t"><thead><tr><th>PR No.</th><th>Company</th><th>Purpose</th><th>Needed</th><th class="num">Est. Total</th><th></th></tr></thead><tbody>
-      ${toDo.map(r=>`<tr><td><a href="#pr-edit/${r.id}">${esc(r.pr_no)}</a></td><td>${esc(r.company?.code)}</td><td>${esc((r.purpose||"").slice(0,70))}</td><td>${d8(r.date_needed)}</td><td class="num">${money(r.total)}</td><td><button class="btn sm pri" data-pr="${r.id}">Start canvass</button></td></tr>`).join("")}</tbody></table></div>`:`<div class="muted small">None.</div>`}</div>
+      ${(toDo||[]).length?`<div class="tbl-wrap"><table class="t"><thead><tr><th>PR No.</th><th>Type</th><th>Company</th><th>Purpose</th><th>Needed</th><th class="num">Est. Total</th><th></th></tr></thead><tbody>
+      ${toDo.map(r=>`<tr><td><a href="#pr-edit/${r.id}">${esc(r.pr_no)}</a></td><td>${ptype(r.purchase_type)}</td><td>${esc(r.company?.code)}</td><td>${esc((r.purpose||"").slice(0,70))}</td><td>${d8(r.date_needed)}</td><td class="num">${money(r.total)}</td><td><button class="btn sm pri" data-pr="${r.id}">Start canvass</button></td></tr>`).join("")}</tbody></table></div>`:`<div class="muted small">None.</div>`}</div>
     <div class="card"><h3>Canvass sheets</h3>
-      ${rows.length?`<div class="tbl-wrap"><table class="t"><thead><tr><th>CV No.</th><th>PR No.</th><th>Company</th><th>Purpose</th><th>Created</th><th>Status</th></tr></thead><tbody>
-      ${rows.map(r=>`<tr class="click" onclick="go('cv-edit/${r.id}')"><td class="bold">${esc(r.cv_no)}</td><td>${esc(r.pr?.pr_no)}</td><td>${esc(r.company?.code)}</td><td>${esc((r.pr?.purpose||"").slice(0,60))}</td><td>${d8(r.created_at)}</td><td>${badge(r.status)}</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">No canvass yet.</div>`}</div>`;
+      ${rows.length?`<div class="tbl-wrap"><table class="t"><thead><tr><th>CV No.</th><th>PR No.</th><th>Type</th><th>Company</th><th>Purpose</th><th>Created</th><th>Status</th></tr></thead><tbody>
+      ${rows.map(r=>`<tr class="click" onclick="go('cv-edit/${r.id}')"><td class="bold">${esc(r.cv_no)}</td><td>${esc(r.pr?.pr_no)}</td><td>${ptype(r.pr?.purchase_type)}</td><td>${esc(r.company?.code)}</td><td>${esc((r.pr?.purpose||"").slice(0,60))}</td><td>${d8(r.created_at)}</td><td>${badge(r.status)}</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">No canvass yet.</div>`}</div>`;
   $$("[data-pr]").forEach(b=>b.onclick=async()=>{ const cv=await run(()=>rpc("pur_start_canvass",{p_pr:b.dataset.pr})); if(cv) go("cv-edit/"+cv); });
 }
 
@@ -647,7 +662,7 @@ async function viewCV(id){
   const sname = sid => S.suppliers.find(s=>s.id===sid)?.name || "?";
 
   $("#view").innerHTML = `
-    <div class="doc-head"><div><h3>${esc(cv.cv_no)}</h3><div class="muted small">For <a href="#pr-edit/${cv.pr_id}">${esc(cv.pr.pr_no)}</a> · ${esc(cv.company.code)} · ${esc(cv.pr.purpose||"")}</div></div>${badge(cv.status)}<div class="sp"></div>
+    <div class="doc-head"><div><h3>${esc(cv.cv_no)} ${ptype(cv.pr.purchase_type)}</h3><div class="muted small">For <a href="#pr-edit/${cv.pr_id}">${esc(cv.pr.pr_no)}</a> · ${esc(cv.company.code)} · ${esc(cv.pr.purpose||"")}</div></div>${badge(cv.status)}<div class="sp"></div>
       <div class="row">${editable?`<button class="btn" id="cAddS">＋ Add supplier</button><button class="btn" id="cLow">Award lowest per line</button><button class="btn" id="cSave">💾 Save</button><button class="btn pri" id="cAward">✔ Award & generate POs</button><button class="btn warn" id="cCancel">Cancel</button>`:""}
       <button class="btn" id="cPrint">🖨 Print abstract</button></div></div>
     ${editable?`<div class="note info">Add the suppliers who quoted, enter their unit prices, then tick the winning supplier for each line. Awarding creates one draft PO per winning supplier. Suppliers must already be approved in the Supplier Master.</div>`:""}
@@ -714,6 +729,7 @@ async function viewPOList(){
   $("#view").innerHTML = `
     <div class="filters">
       <select class="inp" id="fCo"><option value="">All companies</option>${myCompanies().map(c=>`<option value="${c.id}">${esc(c.code)}</option>`).join("")}</select>
+      <select class="inp" id="fTy"><option value="">Trade &amp; Non-Trade</option>${PTYPES.map(t=>`<option>${t}</option>`).join("")}</select>
       <select class="inp" id="fSt"><option value="">All status</option>${["draft","pending","approved","rejected","sent","partial","received","closed","cancelled"].map(s=>`<option>${s}</option>`).join("")}</select>
       <select class="inp" id="fSup"><option value="">All suppliers</option>${S.suppliers.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("")}</select>
       <input class="inp" id="fQ" placeholder="Search PO no.">
@@ -725,22 +741,24 @@ async function viewPOList(){
     if($("#fCo").value) q=q.eq("company_id",$("#fCo").value);
     if($("#fSt").value) q=q.eq("status",$("#fSt").value);
     if($("#fSup").value) q=q.eq("supplier_id",$("#fSup").value);
+    if($("#fTy").value) q=q.eq("purchase_type",$("#fTy").value);
     const t=$("#fQ").value.trim(); if(t) q=q.ilike("po_no",`%${t}%`);
     rows = chk(await q);
-    $("#poTbl").innerHTML = rows.length ? `<div class="tbl-wrap"><table class="t"><thead><tr><th>PO No.</th><th>Company</th><th>Supplier</th><th>PR No.</th><th>PO date</th><th>Delivery</th><th class="num">Total</th><th>Status</th></tr></thead><tbody>
-      ${rows.map(r=>`<tr class="click" onclick="go('po-edit/${r.id}')"><td class="bold">${esc(r.po_no)}</td><td>${esc(r.company?.code)}</td><td>${esc(r.supplier?.name)}</td><td>${esc(r.pr?.pr_no||"—")}</td><td>${d8(r.po_date)}</td><td>${d8(r.delivery_date)}</td><td class="num">${money(r.total)}</td><td>${badge(r.status)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="card empty">No purchase orders found.</div>`;
+    $("#poTbl").innerHTML = rows.length ? `<div class="tbl-wrap"><table class="t"><thead><tr><th>PO No.</th><th>Type</th><th>Company</th><th>Supplier</th><th>PR No.</th><th>PO date</th><th>Delivery</th><th class="num">Total</th><th>Status</th></tr></thead><tbody>
+      ${rows.map(r=>`<tr class="click" onclick="go('po-edit/${r.id}')"><td class="bold">${esc(r.po_no)}</td><td>${ptype(r.purchase_type)}</td><td>${esc(r.company?.code)}</td><td>${esc(r.supplier?.name)}</td><td>${esc(r.pr?.pr_no||"—")}</td><td>${d8(r.po_date)}</td><td>${d8(r.delivery_date)}</td><td class="num">${money(r.total)}</td><td>${badge(r.status)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="card empty">No purchase orders found.</div>`;
   };
-  ["fCo","fSt","fSup"].forEach(i=>$("#"+i).onchange=load); let tm; $("#fQ").oninput=()=>{clearTimeout(tm);tm=setTimeout(load,350);};
-  $("#fX").onclick=()=>exportXlsx(rows.map(r=>({PO_No:r.po_no,Company:r.company?.code,Supplier:r.supplier?.name,PR_No:r.pr?.pr_no,PO_Date:r.po_date,Delivery_Date:r.delivery_date,VAT:r.vat_type,Subtotal:Number(r.subtotal),VAT_Amount:Number(r.vat_amount),Total:Number(r.total),Status:r.status})),"PO_List");
+  ["fCo","fSt","fSup","fTy"].forEach(i=>$("#"+i).onchange=load); let tm; $("#fQ").oninput=()=>{clearTimeout(tm);tm=setTimeout(load,350);};
+  $("#fX").onclick=()=>exportXlsx(rows.map(r=>({PO_No:r.po_no,Type:r.purchase_type,Company:r.company?.code,Supplier:r.supplier?.name,PR_No:r.pr?.pr_no,PO_Date:r.po_date,Delivery_Date:r.delivery_date,VAT:r.vat_type,Subtotal:Number(r.subtotal),VAT_Amount:Number(r.vat_amount),Total:Number(r.total),Status:r.status})),"PO_List");
   await load();
 }
 function newManualPO(){
   modal({title:"New PO without PR", body:`<div class="note">Use this only for purchases that have no PR (e.g. repeat orders). The PO still goes through the approval matrix.</div>
+    <div class="fld" style="margin-bottom:10px"><label>Purchase type</label><select id="mpT">${PTYPES.map(t=>`<option>${t}</option>`).join("")}</select></div>
     <div class="fld" style="margin-bottom:10px"><label>Company</label><select id="mpC">${myCompanies().map(c=>`<option value="${c.id}">${esc(c.code)} — ${esc(c.name)}</option>`).join("")}</select></div>
     <div class="fld"><label>Supplier</label><select id="mpS"><option value="">— select —</option>${supplierOptions()}</select></div>`,
     foot:`<button class="btn" data-close>Cancel</button><button class="btn pri" id="mpOk">Create</button>`,
     onOpen:(el,close)=>{ $("#mpOk",el).onclick=async()=>{ const s=$("#mpS",el).value, c=$("#mpC",el).value; if(!s) return toast("Select a supplier.","err"); const sp=S.suppliers.find(x=>x.id===s);
-      const r = await run(async()=>chk(await sb.from("pur_purchase_orders").insert({company_id:c,supplier_id:s,created_by:S.user.id,payment_terms:sp.payment_terms||"",vat_type:sp.vat_type==="NON-VAT"?"NON-VAT":"VAT-EXCLUSIVE",delivery_address:comp(c).address||""}).select("id").single()));
+      const r = await run(async()=>chk(await sb.from("pur_purchase_orders").insert({purchase_type:$("#mpT",el).value,company_id:c,supplier_id:s,created_by:S.user.id,payment_terms:sp.payment_terms||"",vat_type:sp.vat_type==="NON-VAT"?"NON-VAT":"VAT-EXCLUSIVE",delivery_address:comp(c).address||""}).select("id").single()));
       close(); if(r) go("po-edit/"+r.id); }; }});
 }
 async function viewPO(id){
@@ -751,8 +769,8 @@ async function viewPO(id){
   const tr = await trailHtml(id); const myAppr = myPendingStep(tr.approvals);
   const L = lines.map(l=>({...l}));
   $("#view").innerHTML = `
-    ${itemDatalist()}
-    <div class="doc-head"><div><h3>${esc(po.po_no)}</h3><div class="muted small">${esc(po.company.name)} ${po.pr?`· from <a href="#pr-edit/${po.pr_id}">${esc(po.pr.pr_no)}</a>`:""} ${po.canvass_id?`· <a href="#cv-edit/${po.canvass_id}">canvass</a>`:""}</div></div>${badge(po.status)}<div class="sp"></div>
+    ${itemDatalist(po.purchase_type)}
+    <div class="doc-head"><div><h3>${esc(po.po_no)} ${ptype(po.purchase_type)}</h3><div class="muted small">${esc(po.company.name)} ${po.pr?`· from <a href="#pr-edit/${po.pr_id}">${esc(po.pr.pr_no)}</a>`:""} ${po.canvass_id?`· <a href="#cv-edit/${po.canvass_id}">canvass</a>`:""}</div></div>${badge(po.status)}<div class="sp"></div>
       <div class="row">${approveButtons(myAppr)}
         ${editable?`<button class="btn" id="oSave">💾 Save</button><button class="btn pri" id="oSubmit">➤ Submit for approval</button>`:""}
         ${editable&&po.status==="draft"&&!po.pr_id?`<button class="btn warn" id="oDel">Delete</button>`:""}
@@ -794,7 +812,7 @@ async function viewPO(id){
     tb.addEventListener("input",e=>{ const tr=e.target.closest("tr"); if(!tr) return; const l=L[+tr.dataset.i];
       if(e.target.classList.contains("li-qty")) l.qty=e.target.value; if(e.target.classList.contains("li-pr")) l.unit_price=e.target.value;
       $(".li-amt",tr).textContent=money(num(l.qty)*num(l.unit_price)); calc(); });
-    tb.addEventListener("change",e=>{ if(!e.target.classList.contains("li-item")) return; const l=L[+e.target.closest("tr").dataset.i]; const it=itemFromText(e.target.value);
+    tb.addEventListener("change",e=>{ if(!e.target.classList.contains("li-item")) return; const l=L[+e.target.closest("tr").dataset.i]; const it=itemFromText(e.target.value, po.purchase_type);
       if(it){ l.item_id=it.id; l.description=it.description; l.uom=it.uom; if(!num(l.unit_price)) l.unit_price=it.last_price||0; } else { l.item_id=null; toast("Pick an item from the Item Master.","err"); } setTimeout(draw,0); });
     tb.addEventListener("click",e=>{ if(e.target.classList.contains("li-del")){ L.splice(+e.target.closest("tr").dataset.i,1); draw(); }});
     $("#oVat").onchange=calc;
@@ -871,7 +889,7 @@ async function viewRR(id){
 // MASTER DATA (Item / Supplier) — changes approved by Module Admin
 // =====================================================================
 const MF = {
-  item:[{k:"code",l:"Item code (blank = auto)"},{k:"description",l:"Description",req:true},{k:"uom",l:"Unit of measure",req:true},{k:"category",l:"Category"},{k:"specs",l:"Specifications",ta:true},{k:"last_price",l:"Reference price",n:true}],
+  item:[{k:"code",l:"Item code (blank = auto)"},{k:"description",l:"Description",req:true},{k:"purchase_type",l:"Purchase type",opt:["Both","Trade","Non-Trade"]},{k:"uom",l:"Unit of measure",req:true},{k:"category",l:"Category"},{k:"specs",l:"Specifications",ta:true},{k:"last_price",l:"Reference price",n:true}],
   supplier:[{k:"code",l:"Supplier code (blank = auto)"},{k:"name",l:"Supplier name",req:true},{k:"tin",l:"TIN"},{k:"address",l:"Address",ta:true},{k:"contact_person",l:"Contact person"},{k:"phone",l:"Phone"},{k:"email",l:"Email"},{k:"payment_terms",l:"Payment terms"},{k:"vat_type",l:"VAT type",opt:["VAT","NON-VAT"]},{k:"category",l:"Category"}],
 };
 async function viewMaster(kind){
@@ -885,8 +903,8 @@ async function viewMaster(kind){
     <div class="note info">${isItem?"Item":"Supplier"} Master is controlled by the <b>Module Admin</b>. ${isAdmin()?"As Module Admin your changes apply immediately; requests from other users wait in <a href='#mreq'>Master Data Requests</a>.":"Your additions and changes are sent to the Module Admin for approval before they can be used."}</div>
     <div class="filters"><input class="inp" id="mQ" placeholder="Search…" style="min-width:260px"><select class="inp" id="mSt"><option value="active">Active</option><option value="inactive">Inactive</option><option value="">All</option></select></div>
     <div id="mTbl"></div>`;
-  const cols = isItem ? ["code","description","uom","category","last_price"] : ["code","name","tin","contact_person","phone","payment_terms","vat_type"];
-  const heads = isItem ? ["Code","Description","UOM","Category","Ref. price"] : ["Code","Name","TIN","Contact","Phone","Terms","VAT"];
+  const cols = isItem ? ["code","description","purchase_type","uom","category","last_price"] : ["code","name","tin","contact_person","phone","payment_terms","vat_type"];
+  const heads = isItem ? ["Code","Description","Type","UOM","Category","Ref. price"] : ["Code","Name","TIN","Contact","Phone","Terms","VAT"];
   const draw = ()=>{
     const q=$("#mQ").value.trim().toLowerCase(), st=$("#mSt").value;
     const rows = list.filter(r=>(!st||r.status===st) && (!q || cols.some(c=>String(r[c]??"").toLowerCase().includes(q))));
@@ -915,7 +933,7 @@ async function masterToggle(kind, r){
 }
 function masterRequestForm(kind, action, rec){
   const f = MF[kind]; const isItem = kind==="item"; const direct = isAdmin();
-  const val = k => rec ? (rec[k]??"") : (k==="vat_type"?"VAT":k==="uom"?"PC":"");
+  const val = k => rec ? (rec[k]??"") : (k==="vat_type"?"VAT":k==="uom"?"PC":k==="purchase_type"?"Both":"");
   modal({title:`${direct?(action==="create"?"Add":"Edit"):(action==="create"?"Request new":"Request change to")} ${isItem?"item":"supplier"}`,
     body:`${direct?"":`<div class="note info">This request goes to the Module Admin. The ${isItem?"item":"supplier"} can be used once approved.</div>`}
       <div class="grid">${f.map(x=>`<div class="fld" ${x.ta?'style="grid-column:1/-1"':""}><label>${esc(x.l)}${x.req?" *":""}</label>${
@@ -1001,27 +1019,27 @@ async function viewSetup(tab){
   ({matrix:setupMatrix, users:setupUsers, companies:setupCompanies, depts:setupDepts}[tab]||setupMatrix)();
 }
 async function setupMatrix(){
-  const rules = chk(await sb.from("pur_approval_rules").select("*").order("doc_type").order("step_no").order("min_amount"));
+  const rules = chk(await sb.from("pur_approval_rules").select("*").order("doc_type").order("step_no").order("purchase_type").order("min_amount"));
   const active = Object.values(S.profiles).filter(p=>p.active);
-  $("#setupBody").innerHTML = `<div class="note info">Each company has its own approvers for <b>PR</b> and <b>PO</b>. A step applies when the document amount is <b>at or above</b> its minimum amount; steps run in order (1 → 2 → 3). Put two people on the same step if either one may approve.</div>
+  $("#setupBody").innerHTML = `<div class="note info">Each company has its own approvers for <b>PR</b> and <b>PO</b>. A step can apply to <b>All</b> purchases or only to <b>Trade</b> / <b>Non-Trade</b>, and applies when the document amount is <b>at or above</b> its minimum amount; steps run in order (1 → 2 → 3). Put two people on the same step if either one may approve.</div>
     ${S.companies.filter(c=>c.active).map(c=>`<div class="card"><div class="toolbar"><h3 style="margin:0">${esc(c.code)} — ${esc(c.name)}</h3><div class="sp"></div><button class="btn sm" data-copy="${c.id}">Copy matrix to…</button></div>
-      <div class="grid">${["PR","PO"].map(dt_=>{ const rs=rules.filter(r=>r.company_id===c.id&&r.doc_type===dt_);
+      <div style="display:grid;gap:16px">${["PR","PO"].map(dt_=>{ const rs=rules.filter(r=>r.company_id===c.id&&r.doc_type===dt_);
         return `<div><div class="bold" style="margin-bottom:6px">${dt_==="PR"?"Purchase Requisition":"Purchase Order"}</div>
-        <div class="tbl-wrap"><table class="t"><thead><tr><th>Step</th><th>Name</th><th>Approver</th><th class="num">Min. amount</th><th></th></tr></thead><tbody>
-        ${rs.map(r=>`<tr><td>${r.step_no}</td><td>${esc(r.step_name)}</td><td>${esc(pname(r.approver_id))}</td><td class="num">${money(r.min_amount)}</td><td><button class="btn sm warn" data-delr="${r.id}">✕</button></td></tr>`).join("") || `<tr><td colspan="5" class="muted small">No approvers — documents cannot be submitted.</td></tr>`}
-        <tr><td><input class="inp" style="width:50px" data-n="step" value="${(Math.max(0,...rs.map(r=>r.step_no))+1)}"></td><td><input class="inp" data-n="name" placeholder="e.g. Dept Head"></td>
-          <td><select class="inp" data-n="appr"><option value="">— approver —</option>${active.map(p=>`<option value="${p.user_id}">${esc(p.full_name||p.email)}</option>`).join("")}</select></td>
+        <div class="tbl-wrap"><table class="t"><thead><tr><th>Step</th><th>Applies to</th><th>Name</th><th>Approver</th><th class="num">Min. amount</th><th></th></tr></thead><tbody>
+        ${rs.map(r=>`<tr><td>${r.step_no}</td><td>${r.purchase_type==="All"?"All":ptype(r.purchase_type)}</td><td>${esc(r.step_name)}</td><td>${esc(pname(r.approver_id))}</td><td class="num">${money(r.min_amount)}</td><td><button class="btn sm warn" data-delr="${r.id}">✕</button></td></tr>`).join("") || `<tr><td colspan="6" class="muted small">No approvers — documents cannot be submitted.</td></tr>`}
+        <tr><td><input class="inp" style="width:50px" data-n="step" value="${(Math.max(0,...rs.map(r=>r.step_no))+1)}"></td><td><select class="inp" data-n="ptype" style="width:110px"><option>All</option>${PTYPES.map(t=>`<option>${t}</option>`).join("")}</select></td><td><input class="inp" data-n="name" placeholder="e.g. Dept Head" style="min-width:140px"></td>
+          <td><select class="inp" data-n="appr" style="min-width:180px"><option value="">— approver —</option>${active.map(p=>`<option value="${p.user_id}">${esc(p.full_name||p.email)}</option>`).join("")}</select></td>
           <td><input class="inp right" style="width:110px" data-n="min" value="0"></td><td><button class="btn sm pri" data-addr="${c.id}|${dt_}">Add</button></td></tr>
         </tbody></table></div></div>`; }).join("")}</div></div>`).join("")}`;
   $$("[data-delr]").forEach(b=>b.onclick=async()=>{ await run(async()=>chk(await sb.from("pur_approval_rules").delete().eq("id",b.dataset.delr)),"Removed."); setupMatrix(); });
   $$("[data-addr]").forEach(b=>b.onclick=async()=>{ const tr=b.closest("tr"); const [co,dt_]=b.dataset.addr.split("|"); const g=n=>$(`[data-n="${n}"]`,tr).value;
     if(!g("appr")) return toast("Select an approver.","err");
-    await run(async()=>chk(await sb.from("pur_approval_rules").insert({company_id:co,doc_type:dt_,step_no:parseInt(g("step"))||1,step_name:g("name"),approver_id:g("appr"),min_amount:num(g("min"))})),"Added."); setupMatrix(); });
+    await run(async()=>chk(await sb.from("pur_approval_rules").insert({company_id:co,doc_type:dt_,purchase_type:g("ptype"),step_no:parseInt(g("step"))||1,step_name:g("name"),approver_id:g("appr"),min_amount:num(g("min"))})),"Added."); setupMatrix(); });
   $$("[data-copy]").forEach(b=>b.onclick=()=>{ const src=b.dataset.copy;
     modal({title:"Copy approval matrix", body:`<div class="note">Replaces the matrix of the selected companies with ${esc(comp(src).code)}'s.</div>${S.companies.filter(c=>c.id!==src&&c.active).map(c=>`<label class="chk"><input type="checkbox" value="${c.id}"> ${esc(c.code)} — ${esc(c.name)}</label>`).join("")}`,
       foot:`<button class="btn" data-close>Cancel</button><button class="btn pri" id="cpOk">Copy</button>`,
       onOpen:(el,close)=>{ $("#cpOk",el).onclick=async()=>{ const tg=$$("input:checked",el).map(i=>i.value); if(!tg.length) return; const srcR=rules.filter(r=>r.company_id===src);
-        await run(async()=>{ chk(await sb.from("pur_approval_rules").delete().in("company_id",tg)); const ins=tg.flatMap(t=>srcR.map(r=>({company_id:t,doc_type:r.doc_type,step_no:r.step_no,step_name:r.step_name,approver_id:r.approver_id,min_amount:r.min_amount}))); if(ins.length) chk(await sb.from("pur_approval_rules").insert(ins)); },"Matrix copied."); close(); setupMatrix(); }; }}); });
+        await run(async()=>{ chk(await sb.from("pur_approval_rules").delete().in("company_id",tg)); const ins=tg.flatMap(t=>srcR.map(r=>({company_id:t,doc_type:r.doc_type,purchase_type:r.purchase_type,step_no:r.step_no,step_name:r.step_name,approver_id:r.approver_id,min_amount:r.min_amount}))); if(ins.length) chk(await sb.from("pur_approval_rules").insert(ins)); },"Matrix copied."); close(); setupMatrix(); }; }}); });
 }
 async function setupUsers(){
   const [profs, uc] = await Promise.all([sb.from("pur_profiles").select("*").order("full_name").then(chk), sb.from("pur_user_companies").select("*").then(chk)]);
@@ -1110,7 +1128,7 @@ function pdfHeader(doc, co, title, docNo){
 function kv(doc, pairs, y){
   const W = doc.internal.pageSize.getWidth(); const colW = (W-28)/2;
   doc.setFontSize(9);
-  pairs.forEach((p,i)=>{ const cx = 14 + (i%2)*colW, cy = y + Math.floor(i/2)*5.5;
+  pairs.forEach((p,i)=>{ const cx = 14 + (i%2)*colW, cy = y + Math.floor(i/2)*5.5; if(!p[0]) return;
     doc.setFont("helvetica","bold"); doc.text(p[0]+":", cx, cy); doc.setFont("helvetica","normal"); doc.text(doc.splitTextToSize(String(p[1]??""), colW-32)[0]||"", cx+30, cy); });
   return y + Math.ceil(pairs.length/2)*5.5 + 2;
 }
@@ -1133,7 +1151,7 @@ function approvedSigs(approvals){
 function printPR(pr, lines, approvals){
   const {jsPDF} = window.jspdf; const doc = new jsPDF();
   let y = pdfHeader(doc, comp(pr.company_id), "PURCHASE REQUISITION", pr.pr_no);
-  y = kv(doc, [["Department", pr.dept?.name||""],["Date", d8(pr.request_date)],["Requested by", pname(pr.requested_by)],["Date needed", d8(pr.date_needed)],["Priority", pr.priority],["Status", pr.status.toUpperCase()]], y);
+  y = kv(doc, [["Purchase type", (pr.purchase_type||"").toUpperCase()],["",""],["Department", pr.dept?.name||""],["Date", d8(pr.request_date)],["Requested by", pname(pr.requested_by)],["Date needed", d8(pr.date_needed)],["Priority", pr.priority],["Status", pr.status.toUpperCase()]], y);
   doc.setFont("helvetica","bold"); doc.text("Purpose:", 14, y+2); doc.setFont("helvetica","normal"); const pl = doc.splitTextToSize(pr.purpose||"", 160); doc.text(pl, 30, y+2); y += 4 + pl.length*4;
   doc.autoTable({...TBL, startY:y, head:[["#","Item code","Description","UOM","Qty","Est. unit cost","Amount","Remarks"]],
     body: lines.map((l,i)=>[i+1, S.items.find(x=>x.id===l.item_id)?.code||"", l.description, l.uom, qtyf(l.qty), money(l.est_unit_cost), money(l.amount), l.remarks||""]),
@@ -1145,7 +1163,7 @@ function printPR(pr, lines, approvals){
 function printPO(po, lines, approvals){
   const {jsPDF} = window.jspdf; const doc = new jsPDF(); const s = po.supplier;
   let y = pdfHeader(doc, po.company, "PURCHASE ORDER", po.po_no);
-  y = kv(doc, [["Supplier", s.name],["PO date", d8(po.po_date)],["Address", s.address||""],["Delivery date", d8(po.delivery_date)],["TIN", s.tin||""],["Terms", po.payment_terms||""],["Contact", [s.contact_person,s.phone].filter(Boolean).join(" / ")],["PR ref.", po.pr?.pr_no||"—"]], y);
+  y = kv(doc, [["Purchase type", (po.purchase_type||"").toUpperCase()],["",""],["Supplier", s.name],["PO date", d8(po.po_date)],["Address", s.address||""],["Delivery date", d8(po.delivery_date)],["TIN", s.tin||""],["Terms", po.payment_terms||""],["Contact", [s.contact_person,s.phone].filter(Boolean).join(" / ")],["PR ref.", po.pr?.pr_no||"—"]], y);
   doc.setFont("helvetica","bold"); doc.text("Deliver to:", 14, y+2); doc.setFont("helvetica","normal"); const al=doc.splitTextToSize(po.delivery_address||"",160); doc.text(al, 34, y+2); y += 4 + al.length*4;
   doc.autoTable({...TBL, startY:y, head:[["#","Description","UOM","Qty","Unit price","Amount"]],
     body: lines.map((l,i)=>[i+1, l.description, l.uom, qtyf(l.qty), money(l.unit_price), money(l.amount)]),
@@ -1174,7 +1192,7 @@ function printCanvass(cv, lines, SUP, P, AW){
   const {jsPDF} = window.jspdf; const doc = new jsPDF({orientation:"landscape"});
   const sname = sid => S.suppliers.find(s=>s.id===sid)?.name || "?";
   let y = pdfHeader(doc, cv.company, "ABSTRACT OF CANVASS", cv.cv_no);
-  y = kv(doc, [["PR no.", cv.pr.pr_no],["Date", d8(cv.created_at)],["Purpose", cv.pr.purpose||""],["Status", cv.status.toUpperCase()]], y);
+  y = kv(doc, [["PR no.", cv.pr.pr_no],["Purchase type", cv.pr.purchase_type],["Date", d8(cv.created_at)],["Purpose", cv.pr.purpose||""],["Status", cv.status.toUpperCase()]], y);
   const head = [["Item","Qty", ...SUP.map(s=>sname(s.supplier_id))]];
   const body = lines.map(l=>[l.description, qtyf(l.qty)+" "+l.uom, ...SUP.map(s=>{ const v=P[s.supplier_id+"|"+l.id]; return (v!==undefined&&v!==""?money(v):"—") + (AW[l.id]===s.supplier_id?"  *":""); })]);
   body.push(["Total quoted","", ...SUP.map(s=>money(lines.reduce((a,l)=>{ const v=P[s.supplier_id+"|"+l.id]; return a+(v!==undefined&&v!==""?num(v)*num(l.qty):0); },0)))]);

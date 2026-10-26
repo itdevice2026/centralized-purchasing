@@ -3,6 +3,13 @@
 Single-page web app (GitHub Pages) + Supabase (`bom-system` project, tables prefixed `pur_`) for all Meatplus group companies:
 MTC, PMAI, PAEI, FSEI, MLC, NBC.
 
+## Purchase types
+Every PR and PO is either **Trade** (goods for resale / production) or **Non-Trade** (supplies, services, assets).
+- POs inherit the type of their PR.
+- Approval Matrix steps can apply to **All**, **Trade** only or **Non-Trade** only — so the two types can have different approvers.
+- Items are tagged **Both**, **Trade** or **Non-Trade**; a PR only accepts items allowed for its type.
+- Lists can be filtered by type; the type is printed on PR, canvass and PO forms.
+
 ## Workflow
 1. **Purchase Requisition (PR)** — requester picks items from the Item Master, submits.
 2. **Approval** — routed by the per-company **Approval Matrix** (PR and PO separately). A step applies when the amount is ≥ its minimum; steps run in order; several approvers on one step = any one may approve. Rejected documents go back to the preparer for editing and resubmission.
