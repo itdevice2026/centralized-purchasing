@@ -6,7 +6,7 @@ MTC, PMAI, PAEI, FSEI, MLC, NBC.
 ## Modules: Trade and Non-Trade
 Trade (goods for resale / production) and Non-Trade (supplies, services, assets) are **separate modules**, each with its own menu: Purchase Requisition, Canvass / RFQ, Purchase Orders, Receiving and its own **Supplier Master**.
 - Separate numbering: `PR-T-MTC-2026-00001` / `PR-N-…`, `CV-T/N`, `PO-T/N`, `RR-T/N`; suppliers `SUP-T-00001` / `SUP-N-00001`.
-- Each user has **Module access**: Trade only, Non-Trade only, or both (Setup → Users). Users only see documents and suppliers of their modules; approvers still see what is routed to them.
+- Each user has **Module access**: Trade only, Non-Trade only, or both — managed in **Module Admin → Module Users** (Trade team / Non-Trade team, one-click toggles). Users only see documents and suppliers of their modules; approvers still see what is routed to them.
 - POs, canvasses and receiving reports inherit the module of their PR; a document's module never changes.
 - A supplier belongs to one module; a canvass / PO only accepts active suppliers of the same module.
 - Approval Matrix steps apply to **All**, **Trade** or **Non-Trade**.

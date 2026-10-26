@@ -323,6 +323,7 @@ const ROUTES = {
   items:{t:"Item Master", f:()=>viewMaster("item")}, suppliers:{t:"Supplier Master", f:m=>viewMaster("supplier", m), mod:1},
   mreq:{t:"Master Data Requests", f:viewMasterRequests},
   setup:{t:"Setup", f:viewSetup},
+  musers:{t:"Module Users", f:viewModuleUsers},
 };
 async function navCounts(){
   const me = S.user.id;
@@ -348,7 +349,7 @@ function renderNav(){
     <div class="grp">Master Data</div>
     ${a("items","Item Master","▤")}
     ${S.me.role!=="viewer"?a("mreq","Master Data Requests","⇄",S.counts.mr):""}
-    ${isAdmin()?`<div class="grp">Module Admin</div>${a("setup","Setup","⚙")}`:""}`;
+    ${isAdmin()?`<div class="grp">Module Admin</div>${a("musers","Module Users","👥")}${a("setup","Setup","⚙")}`:""}`;
 }
 async function route(){
   const [r, id] = (location.hash.slice(1)||"dashboard").split("/");
@@ -1071,14 +1072,14 @@ async function setupUsers(){
   $("#uNew").onclick = ()=>userForm();
   $$("[data-eu]").forEach(b=>b.onclick=()=>userForm(profs.find(p=>p.user_id===b.dataset.eu), uc.filter(x=>x.user_id===b.dataset.eu).map(x=>x.company_id)));
 }
-function userForm(p, mine=[]){
+function userForm(p, mine=[], preset){
   const isNew = !p;
   modal({title:isNew?"Add user":"Edit user", body:`<div class="grid">
       <div class="fld"><label>Email *</label><input id="uE" type="email" value="${esc(p?.email||"")}" ${isNew?"":"disabled"}></div>
       <div class="fld"><label>Full name *</label><input id="uN" value="${esc(p?.full_name||"")}"></div>
       <div class="fld"><label>Position</label><input id="uP" value="${esc(p?.position||"")}"></div>
       <div class="fld"><label>Role</label><select id="uR">${Object.entries(ROLE_LABEL).map(([k,v])=>`<option value="${k}" ${p?.role===k?"selected":""}>${v}</option>`).join("")}</select></div>
-      <div class="fld"><label>Module access</label><select id="uM">${[["Both","Trade + Non-Trade"],["Trade","Trade only"],["Non-Trade","Non-Trade only"]].map(([k,v])=>`<option value="${k}" ${(p?.module_access||"Both")===k?"selected":""}>${v}</option>`).join("")}</select></div>
+      <div class="fld"><label>Module access</label><select id="uM">${[["Both","Trade + Non-Trade"],["Trade","Trade only"],["Non-Trade","Non-Trade only"]].map(([k,v])=>`<option value="${k}" ${(preset||p?.module_access||"Both")===k?"selected":""}>${v}</option>`).join("")}</select></div>
       ${isNew?`<div class="fld"><label>Temporary password (only if no login yet)</label><input id="uPw" type="text" placeholder="min. 8 characters"></div>`:`<div class="fld"><label>Status</label><select id="uA"><option value="1" ${p.active?"selected":""}>Active</option><option value="0" ${!p.active?"selected":""}>Inactive</option></select></div>`}
     </div>
     <div class="fld" style="margin-top:12px"><label>Companies (for Requester / Receiver / Viewer)</label><div class="grid" style="gap:4px">${S.companies.map(c=>`<label class="chk"><input type="checkbox" class="uC" value="${c.id}" ${mine.includes(c.id)?"checked":""}> ${esc(c.code)} — ${esc(c.name)}</label>`).join("")}</div></div>`,
@@ -1096,12 +1097,70 @@ function userForm(p, mine=[]){
             if(del.length) chk(await sb.from("pur_user_companies").delete().eq("user_id",p.user_id).in("company_id",del));
             if(add.length) chk(await sb.from("pur_user_companies").insert(add.map(c=>({user_id:p.user_id,company_id:c})))); },"Saved.");
         }
-        close(); await loadRefs(); setupUsers();
+        close(); await loadRefs(); (location.hash.startsWith("#musers")?viewModuleUsers:setupUsers)();
       };
       if($("#uRst",el)) $("#uRst",el).onclick=async()=>{ const pw=await ask("Reset password","New temporary password (min. 8). Note: this login is shared with the other Meatplus apps."); if(!pw) return;
         const {data:{session}} = await sb.auth.getSession();
         await run(async()=>{ const r=await fetch(FN_ADMIN,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token,apikey:SUPABASE_KEY},body:JSON.stringify({action:"reset",user_id:p.user_id,password:pw})}); const j=await r.json(); if(!r.ok) throw new Error(j.error||"Failed"); },"Password reset. User must change it at next sign-in."); };
     }});
+}
+// =====================================================================
+// MODULE USERS — separate users for Trade and Non-Trade
+// =====================================================================
+const accessOf = (tr, nt) => tr && nt ? "Both" : tr ? "Trade" : nt ? "Non-Trade" : null;
+const inMod = (p, t) => p.role==="admin" || p.module_access==="Both" || p.module_access===t;
+async function viewModuleUsers(){
+  if(!isAdmin()) throw new Error("Module Admin only.");
+  const [profs, uc] = await Promise.all([sb.from("pur_profiles").select("*").order("full_name").then(chk), sb.from("pur_user_companies").select("*").then(chk)]);
+  const cos = u => uc.filter(x=>x.user_id===u).map(x=>comp(x.company_id).code).join(", ");
+  const coTxt = p => ["admin","purchasing"].includes(p.role) ? "All companies" : (cos(p.user_id)||"No company");
+  const active = profs.filter(p=>p.active);
+  const team = t => active.filter(p=>inMod(p,t));
+  const teamCard = t => { const m = mc(t); const list = team(t);
+    return `<div class="card" style="margin:0"><div class="toolbar"><h3 style="margin:0">${ptype(t)} ${t} Purchasing team <span class="muted small">(${list.length})</span></h3><div class="sp"></div>
+      <div class="row"><button class="btn sm" data-addex="${t}" title="Add an existing user to ${t}">＋ Existing</button><button class="btn sm pri" data-new="${t}" title="Create a new ${t} user">＋ New</button></div></div>
+      ${list.length?`<div class="tbl-wrap"><table class="t"><thead><tr><th>Name</th><th>Role</th><th>Companies</th><th>Also in</th><th></th></tr></thead><tbody>
+      ${list.map(p=>{ const other = t==="Trade"?"Non-Trade":"Trade"; return `<tr><td><b>${esc(p.full_name||p.email)}</b><div class="small muted">${esc(p.email)}</div></td><td>${esc(ROLE_LABEL[p.role])}</td><td class="small">${esc(coTxt(p))}</td>
+        <td>${inMod(p,other)?ptype(other):'<span class="muted small">—</span>'}</td>
+        <td>${p.role==="admin"?'<span class="small muted">Admin</span>':`<button class="btn sm warn" data-rm="${p.user_id}|${t}" title="Remove from ${t}">Remove</button>`}</td></tr>`; }).join("")}
+      </tbody></table></div>`:`<div class="empty">No users in this module yet.</div>`}</div>`; };
+  $("#view").innerHTML = `
+    <div class="note info">Assign each user to the <b>Trade</b> module, the <b>Non-Trade</b> module, or both. Users only see the menus, documents and suppliers of their modules. Module Admins always have both. Roles and companies are set in <a href="#setup/users">Setup → Users</a>.</div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(460px,1fr));gap:16px;margin-bottom:16px">${teamCard("Trade")}${teamCard("Non-Trade")}</div>
+    <div class="card"><div class="toolbar"><h3 style="margin:0">All users — module assignment</h3><div class="sp"></div><input class="inp" id="muQ" placeholder="Search name / email" style="width:220px">
+      <select class="inp" id="muF" style="width:auto"><option value="">Everyone</option><option value="Trade">Trade only</option><option value="Non-Trade">Non-Trade only</option><option value="Both">Both modules</option><option value="inactive">Inactive users</option></select></div>
+      <div id="muTbl"></div></div>`;
+  const draw = ()=>{
+    const q=$("#muQ").value.trim().toLowerCase(), f=$("#muF").value;
+    const rows = profs.filter(p=>(!q||(p.full_name+" "+p.email).toLowerCase().includes(q)) &&
+      (!f || (f==="inactive" ? !p.active : p.active && p.role!=="admin" && p.module_access===f)));
+    $("#muTbl").innerHTML = rows.length?`<div class="tbl-wrap"><table class="t"><thead><tr><th>Name</th><th>Role</th><th>Companies</th><th style="text-align:center">${ptype("Trade")}</th><th style="text-align:center">${ptype("Non-Trade")}</th><th>Status</th><th></th></tr></thead><tbody>
+      ${rows.map(p=>{ const adm=p.role==="admin"; return `<tr style="${p.active?"":"opacity:.55"}"><td><b>${esc(p.full_name||p.email)}</b><div class="small muted">${esc(p.email)}</div></td><td>${esc(ROLE_LABEL[p.role])}</td><td class="small">${esc(coTxt(p))}</td>
+        <td style="text-align:center"><input type="checkbox" style="width:18px;height:18px" data-mt="${p.user_id}" data-t="Trade" ${inMod(p,"Trade")?"checked":""} ${adm?"disabled":""}></td>
+        <td style="text-align:center"><input type="checkbox" style="width:18px;height:18px" data-mt="${p.user_id}" data-t="Non-Trade" ${inMod(p,"Non-Trade")?"checked":""} ${adm?"disabled":""}></td>
+        <td>${badge(p.active?"active":"inactive")}</td><td><button class="btn sm" data-eu="${p.user_id}">Edit</button></td></tr>`; }).join("")}</tbody></table></div>`:`<div class="empty">No users match.</div>`;
+    $$("[data-mt]").forEach(cb=>cb.onchange=async()=>{
+      const u=cb.dataset.mt, tr=$(`[data-mt="${u}"][data-t="Trade"]`).checked, nt=$(`[data-mt="${u}"][data-t="Non-Trade"]`).checked;
+      const acc = accessOf(tr,nt);
+      if(!acc){ cb.checked=true; return toast("A user must belong to at least one module. To remove access completely, set the user to Inactive.","err"); }
+      await saveAccess(u, acc);
+    });
+    $$("[data-eu]").forEach(b=>b.onclick=()=>userForm(profs.find(p=>p.user_id===b.dataset.eu), uc.filter(x=>x.user_id===b.dataset.eu).map(x=>x.company_id)));
+  };
+  const saveAccess = async (u, acc)=>{ const ok = await run(async()=>chk(await sb.from("pur_profiles").update({module_access:acc}).eq("user_id",u)), `${pname(u)}: ${acc==="Both"?"Trade + Non-Trade":acc+" only"}`).then(()=>true).catch(()=>false); await loadRefs(); viewModuleUsers(); return ok; };
+  $("#muQ").oninput=draw; $("#muF").onchange=draw; draw();
+  $$("[data-new]").forEach(b=>b.onclick=()=>userForm(null, [], b.dataset.new));
+  $$("[data-rm]").forEach(b=>b.onclick=async()=>{ const [u,t]=b.dataset.rm.split("|"); const p=profs.find(x=>x.user_id===u); const other=t==="Trade"?"Non-Trade":"Trade";
+    if(!inMod(p,other)) return toast(`${p.full_name} is only in ${t}. Add them to ${other} first, or set them Inactive in Setup → Users.`,"err");
+    if(!await confirmBox(`Remove from ${t}`, `Remove <b>${esc(p.full_name)}</b> from the ${t} module? They keep access to ${other}.`)) return;
+    saveAccess(u, other); });
+  $$("[data-addex]").forEach(b=>b.onclick=()=>{ const t=b.dataset.addex; const cands=active.filter(p=>!inMod(p,t));
+    if(!cands.length) return toast(`Every active user is already in ${t}. Use “New user” to add someone new.`,"err");
+    modal({title:`Add existing user to ${t}`, body:`<div class="fld"><label>User</label><select id="aeU">${cands.map(p=>`<option value="${p.user_id}">${esc(p.full_name||p.email)} — ${esc(ROLE_LABEL[p.role])}</option>`).join("")}</select></div>
+      <label class="chk" style="margin-top:10px"><input type="checkbox" id="aeMove"> Move (remove from ${t==="Trade"?"Non-Trade":"Trade"})</label>`,
+      foot:`<button class="btn" data-close>Cancel</button><button class="btn pri" id="aeOk">Add to ${t}</button>`,
+      onOpen:(el,close)=>{ $("#aeOk",el).onclick=async()=>{ close(); saveAccess($("#aeU",el).value, $("#aeMove",el).checked ? t : "Both"); }; }});
+  });
 }
 async function setupCompanies(){
   $("#setupBody").innerHTML = `<div class="tbl-wrap"><table class="t"><thead><tr><th>Logo</th><th>Code</th><th>Name</th><th>TIN</th><th>Address</th><th>Status</th><th></th></tr></thead><tbody>
