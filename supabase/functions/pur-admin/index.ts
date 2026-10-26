@@ -9,7 +9,7 @@ const cors = {
 };
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...cors, 'Content-Type': 'application/json' } });
-const ROLES = ['admin', 'purchasing', 'requester', 'receiver', 'viewer'];
+const ROLES = ['admin', 'purchasing', 'requester', 'receiver', 'viewer', 'executive', 'accounting'];
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -60,6 +60,7 @@ Deno.serve(async (req) => {
       if (exists) return json({ error: 'This user is already in the Purchasing System.' }, 409);
       const { error: pe } = await admin.from('pur_profiles').insert({
         user_id: userId, email, full_name, role, position: String(body.position || ''),
+        module_access: ['Both', 'Trade', 'Non-Trade'].includes(body.module_access) ? body.module_access : 'Both',
       });
       if (pe) return json({ error: pe.message }, 400);
       if (companies.length) {
