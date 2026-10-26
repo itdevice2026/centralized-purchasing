@@ -27,6 +27,9 @@ Menu **Executive Dashboard** (role *President / Executive* or Module Admin). The
 - Purchases list with **amount, PO status, payment status, amount paid, balance and date of payment**.
 - Documents waiting for approval (days waiting, who it is waiting on) and top suppliers.
 
+### Report: who made it, date and amount
+The Executive Dashboard lists every **Purchase Requisition** (PR no., date, requested by, company/department, amount, status, approved by, PO numbers) and every **Purchase Order** (PO no., date, prepared by, approved by, source PR with its date, requester and amount, supplier, amount, status, payment, date of payment). Documents waiting for approval also show who prepared them. **PDF report** and **Excel** export the same details for the selected period, company and module.
+
 ## Payments
 Accounting / Purchasing record payments on approved POs (date of payment, amount, mode, check/OR/transfer reference). POs show **Unpaid / Partially paid / Paid**, amount paid, balance and last payment date. Overpayment is blocked; Accounting / Module Admin can void a payment with a reason.
 

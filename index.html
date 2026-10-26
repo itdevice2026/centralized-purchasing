@@ -1237,7 +1237,7 @@ async function viewExec(){
   if(!isExec()) throw new Error("The Executive Dashboard is for the President / Module Admin only.");
   const st = S.exState || (S.exState = {per:"mtd", co:"", tab:"", pay:""});
   if(!st.from){ [st.from, st.to] = exRange(st.per); }
-  $("#topActions").innerHTML = `<button class="btn" id="exX">⭳ Excel</button>`;
+  $("#topActions").innerHTML = `<button class="btn" id="exPdf">⭳ PDF report</button><button class="btn" id="exX">⭳ Excel</button>`;
   $("#view").innerHTML = `
     <div class="filters" style="align-items:center">
       <select class="inp" id="exPer">${[["mtd","This month"],["lm","Last month"],["qtd","This quarter"],["ytd","Year to date"],["12m","Last 12 months"],["custom","Custom range"]].map(([k,v])=>`<option value="${k}" ${st.per===k?"selected":""}>${v}</option>`).join("")}</select>
@@ -1273,7 +1273,7 @@ async function viewExecLoad(){
       </div>
       <div class="ex-meter" title="Paid ${paidPct}%"><div style="width:${Math.min(100,paidPct)}%;background:${EX_COLORS[t]}"></div></div>
       <div class="small muted" style="margin-top:4px">Paid ${paidPct}% of ${t} purchases in the period</div></div>`; };
-  const P = d.purchases||[];
+  const P = d.purchases||[], R = d.requisitions||[];
   const TY = myTypes();
   const link = (route, id) => isPresident() ? "" : ` class="click" onclick="go('${route}/${id}')"`;
   $("#exBody").innerHTML = `
@@ -1288,13 +1288,16 @@ async function viewExecLoad(){
       <div class="card"><h3>Monthly purchases — last 12 months</h3><div class="ex-chart"><canvas id="exMonthly"></canvas></div></div>
       <div class="card"><h3>Purchases by company</h3><div class="ex-chart"><canvas id="exCompany"></canvas></div></div>
     </div>
-    <div class="card"><div class="toolbar"><h3 style="margin:0">Purchases — amount, status &amp; payment (${P.length})</h3><div class="sp"></div>
+    <div class="card"><div class="toolbar"><h3 style="margin:0">Purchase Requisitions — who made, date &amp; amount (${R.length})</h3><div class="sp"></div>
+      <select class="inp" id="exRSt" style="width:auto"><option value="">All PR status</option>${[...new Set(R.map(x=>x.status))].map(v=>`<option value="${v}">${v}</option>`).join("")}</select></div>
+      <div id="exReq"></div></div>
+    <div class="card"><div class="toolbar"><h3 style="margin:0">Purchase Orders — who made, amount, status &amp; payment (${P.length})</h3><div class="sp"></div>
       <select class="inp" id="exTab" style="width:auto">${TY.length>1?`<option value="">Trade &amp; Non-Trade</option>`:""}${TY.map(t=>`<option ${S.exState.tab===t?"selected":""}>${t}</option>`).join("")}</select>
       <select class="inp" id="exPay" style="width:auto"><option value="">All payment status</option><option value="unpaid">Unpaid</option><option value="partial">Partially paid</option><option value="paid">Paid</option></select></div>
       <div id="exPurch"></div></div>
     <div style="display:grid;gap:16px">
-      <div class="card" style="margin:0"><h3>Waiting for approval (${(d.pending||[]).length})</h3>${(d.pending||[]).length?`<div class="tbl-wrap"><table class="t"><thead><tr><th>Doc</th><th>Type</th><th>Company</th><th class="num">Amount</th><th class="num">Days</th><th>Waiting on</th></tr></thead><tbody>
-        ${d.pending.map(x=>`<tr${link(x.doc==="PR"?"pr-edit":"po-edit", x.id)}><td class="bold">${esc(x.no)}</td><td>${ptype(x.type)}</td><td>${esc(x.company)}</td><td class="num">${money(x.amount)}</td><td class="num">${x.days>=3?`<b style="color:var(--red)">${x.days}</b>`:x.days}</td><td class="small">${esc(x.waiting_on||"—")}</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">Nothing waiting for approval.</div>`}</div>
+      <div class="card" style="margin:0"><h3>Waiting for approval (${(d.pending||[]).length})</h3>${(d.pending||[]).length?`<div class="tbl-wrap"><table class="t"><thead><tr><th>Doc</th><th>Type</th><th>Company</th><th>Prepared by</th><th>Date</th><th class="num">Amount</th><th class="num">Days</th><th>Waiting on</th></tr></thead><tbody>
+        ${d.pending.map(x=>`<tr${link(x.doc==="PR"?"pr-edit":"po-edit", x.id)}><td class="bold">${esc(x.no)}</td><td>${ptype(x.type)}</td><td>${esc(x.company)}</td><td>${esc(x.by||"—")}</td><td class="nw">${d8(x.doc_date)}</td><td class="num">${money(x.amount)}</td><td class="num">${x.days>=3?`<b style="color:var(--red)">${x.days}</b>`:x.days}</td><td class="small">${esc(x.waiting_on||"—")}</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">Nothing waiting for approval.</div>`}</div>
       <div class="card" style="margin:0"><h3>Top suppliers in the period</h3>${TY.map(t=>{ const rows=(d.top_suppliers||[]).filter(x=>x.type===t).sort((a,b)=>b.amount-a.amount);
         return `<div class="mod-head" style="margin-top:6px">${ptype(t)}</div>${rows.length?`<table class="t"><tbody>${rows.map((x,i)=>`<tr><td style="width:24px" class="muted">${i+1}</td><td>${esc(x.name)}</td><td class="num muted small">${x.po_count} PO</td><td class="num bold">${money(x.amount)}</td></tr>`).join("")}</tbody></table>`:`<div class="muted small">No purchases.</div>`}`; }).join("")}</div>
     </div>`;
@@ -1302,10 +1305,20 @@ async function viewExecLoad(){
   const drawP = ()=>{ const t=$("#exTab").value, py=$("#exPay").value; S.exState.tab=t; S.exState.pay=py;
     const rows = P.filter(x=>(!t||x.type===t) && (!py || (PAYLIVE.includes(x.status) && x.payment_status===py)));
     const sum = f => rows.reduce((a,x)=>a+Number(x[f]||0),0);
-    $("#exPurch").innerHTML = rows.length?`<div class="tbl-wrap" style="max-height:520px;overflow:auto"><table class="t"><thead><tr><th>PO No.</th><th>Type</th><th>Company</th><th>Supplier</th><th>PO date</th><th class="num">Amount</th><th>PO status</th><th>Payment</th><th class="num">Paid</th><th class="num">Balance</th><th>Date of payment</th></tr></thead><tbody>
-      ${rows.map(x=>`<tr${link("po-edit", x.id)}><td class="bold">${esc(x.po_no)}</td><td>${ptype(x.type)}</td><td>${esc(x.company)}</td><td>${esc(x.supplier)}</td><td class="nw">${d8(x.po_date)}</td><td class="num">${money(x.amount)}</td><td>${badge(x.status)}</td><td class="nw">${payBadge(x)}</td><td class="num">${money(x.amount_paid)}</td><td class="num">${money(x.balance)}</td><td class="nw">${x.last_payment_date?d8(x.last_payment_date):'<span class="muted small">—</span>'}</td></tr>`).join("")}</tbody>
-      <tfoot><tr><td colspan="5" class="right">Total (${rows.length})</td><td class="num">${money(sum("amount"))}</td><td colspan="2"></td><td class="num">${money(sum("amount_paid"))}</td><td class="num">${money(sum("balance"))}</td><td></td></tr></tfoot></table></div>`:`<div class="empty">No purchases in this period.</div>`; };
-  $("#exTab").onchange = drawP; $("#exPay").onchange = drawP; if(S.exState.pay) $("#exPay").value=S.exState.pay; drawP();
+    $("#exPurch").innerHTML = rows.length?`<div class="tbl-wrap" style="max-height:520px;overflow:auto"><table class="t"><thead><tr><th>PO No.</th><th>PO date</th><th>PO prepared by</th><th>From PR</th><th>PR requested by</th><th>Type</th><th>Company</th><th>Supplier</th><th class="num">PO amount</th><th>PO status</th><th>Payment</th><th class="num">Paid</th><th class="num">Balance</th><th>Date of payment</th></tr></thead><tbody>
+      ${rows.map(x=>`<tr${link("po-edit", x.id)}><td class="bold nw">${esc(x.po_no)}</td><td class="nw">${d8(x.po_date)}</td><td>${esc(x.po_by||"—")}${x.po_approved_by?`<div class="small muted">Approved: ${esc(x.po_approved_by)}</div>`:""}</td>
+        <td class="nw">${x.pr_no?`${esc(x.pr_no)}<div class="small muted">${d8(x.pr_date)} · ₱${money(x.pr_amount)}</div>`:'<span class="muted small">Direct PO</span>'}</td><td>${esc(x.pr_by||"—")}</td>
+        <td>${ptype(x.type)}</td><td>${esc(x.company)}</td><td>${esc(x.supplier)}</td><td class="num">${money(x.amount)}</td><td>${badge(x.status)}</td><td class="nw">${payBadge(x)}</td><td class="num">${money(x.amount_paid)}</td><td class="num">${money(x.balance)}</td><td class="nw">${x.last_payment_date?d8(x.last_payment_date):'<span class="muted small">—</span>'}</td></tr>`).join("")}</tbody>
+      <tfoot><tr><td colspan="8" class="right">Total (${rows.length})</td><td class="num">${money(sum("amount"))}</td><td colspan="2"></td><td class="num">${money(sum("amount_paid"))}</td><td class="num">${money(sum("balance"))}</td><td></td></tr></tfoot></table></div>`:`<div class="empty">No purchases in this period.</div>`; };
+  const drawR = ()=>{ const t=$("#exTab").value, stt=$("#exRSt").value;
+    const rows = R.filter(x=>(!t||x.type===t) && (!stt||x.status===stt)); const sum=f=>rows.reduce((a,x)=>a+Number(x[f]||0),0);
+    $("#exReq").innerHTML = rows.length?`<div class="tbl-wrap" style="max-height:520px;overflow:auto"><table class="t"><thead><tr><th>PR No.</th><th>PR date</th><th>Requested by</th><th>Type</th><th>Company / Dept</th><th>Purpose</th><th class="num">PR amount</th><th>Status</th><th>Approved by</th><th>PO No(s).</th><th class="num">PO amount</th></tr></thead><tbody>
+      ${rows.map(x=>`<tr${link("pr-edit", x.id)}><td class="bold nw">${esc(x.pr_no)}</td><td class="nw">${d8(x.pr_date)}</td><td>${esc(x.pr_by||"—")}</td><td>${ptype(x.type)}</td><td>${esc(x.company)}${x.dept?`<div class="small muted">${esc(x.dept)}</div>`:""}</td>
+        <td class="small" style="max-width:220px">${esc((x.purpose||"").slice(0,90))}</td><td class="num">${money(x.amount)}</td><td>${badge(x.status)}</td>
+        <td>${x.approved_by?`${esc(x.approved_by)}<div class="small muted">${d8(x.approved_at)}</div>`:'<span class="muted small">—</span>'}</td><td class="small">${esc(x.po_nos||"—")}</td><td class="num">${x.po_nos?money(x.po_amount):""}</td></tr>`).join("")}</tbody>
+      <tfoot><tr><td colspan="6" class="right">Total (${rows.length})</td><td class="num">${money(sum("amount"))}</td><td colspan="3"></td><td class="num">${money(sum("po_amount"))}</td></tr></tfoot></table></div>`:`<div class="empty">No purchase requisitions in this period.</div>`; };
+  $("#exRSt").onchange = drawR; drawR();
+  $("#exTab").onchange = ()=>{ drawP(); drawR(); }; $("#exPay").onchange = drawP; if(S.exState.pay) $("#exPay").value=S.exState.pay; drawP();
   // charts
   if(window.Chart){
     Chart.defaults.font.family = '"Segoe UI",system-ui,Arial,sans-serif'; Chart.defaults.color = "#52514e";
@@ -1325,10 +1338,42 @@ async function viewExecLoad(){
   }
   $("#exX").onclick = ()=>{ const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet((d.kpi||[]).map(k=>({Module:k.type,Purchase_Amount:+k.po_amount,PO_Count:+k.po_count,Paid:+k.paid_amount,Unpaid:+k.unpaid_amount,Payments_In_Period:+k.paid_in_period,Pending_PR_Amount:+k.pending_pr_amount,Pending_PO_Amount:+k.pending_po_amount,Open_For_Delivery:+k.open_value}))), "Summary");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(P.map(x=>({PO_No:x.po_no,PR_No:x.pr_no,Module:x.type,Company:x.company,Supplier:x.supplier,PO_Date:x.po_date,Amount:+x.amount,PO_Status:x.status,Payment_Status:payLabel(x),Paid:+x.amount_paid,Balance:+x.balance,Date_of_Payment:x.last_payment_date}))), "Purchases");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(R.map(x=>({PR_No:x.pr_no,PR_Date:x.pr_date,Requested_By:x.pr_by,Module:x.type,Company:x.company,Department:x.dept,Purpose:x.purpose,PR_Amount:+x.amount,PR_Status:x.status,Approved_By:x.approved_by||"",Approved_On:x.approved_at?String(x.approved_at).slice(0,10):"",PO_Nos:x.po_nos||"",PO_Amount:+x.po_amount}))), "Purchase Requisitions");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(P.map(x=>({PO_No:x.po_no,PO_Date:x.po_date,PO_Prepared_By:x.po_by,PO_Approved_By:x.po_approved_by||"",PO_Approved_On:x.po_approved_at?String(x.po_approved_at).slice(0,10):"",PR_No:x.pr_no||"",PR_Date:x.pr_date||"",PR_Requested_By:x.pr_by||"",PR_Amount:x.pr_no?+x.pr_amount:"",Module:x.type,Company:x.company,Supplier:x.supplier,PO_Amount:+x.amount,PO_Status:x.status,Payment_Status:payLabel(x),Paid:+x.amount_paid,Balance:+x.balance,Date_of_Payment:x.last_payment_date}))), "Purchase Orders");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet((d.by_company||[]).map(x=>({Company:x.code,Module:x.type,Amount:+x.amount}))), "By Company");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet((d.pending||[]).map(x=>({Doc:x.no,Module:x.type,Company:x.company,Amount:+x.amount,Days_Waiting:x.days,Waiting_On:x.waiting_on}))), "Pending Approval");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet((d.pending||[]).map(x=>({Doc:x.no,Module:x.type,Company:x.company,Prepared_By:x.by||"",Date:x.doc_date,Amount:+x.amount,Days_Waiting:x.days,Waiting_On:x.waiting_on}))), "Pending Approval");
     XLSX.writeFile(wb, `Executive_Purchases_${st.from}_to_${st.to}.xlsx`); };
+  $("#exPdf").onclick = ()=>execPdf(d, st);
+}
+// Executive report (PDF): summary, PRs (who requested, date, amount) and POs (who prepared, date, amount, payment)
+function execPdf(d, st){
+  const {jsPDF} = window.jspdf; const doc = new jsPDF({orientation:"landscape"}); const W = doc.internal.pageSize.getWidth();
+  const tf = $("#exTab")?.value||""; const R = (d.requisitions||[]).filter(x=>!tf||x.type===tf), P = (d.purchases||[]).filter(x=>!tf||x.type===tf);
+  const m = v => Number(v||0).toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const sum = (a,f) => a.reduce((s,x)=>s+Number(x[f]||0),0);
+  const r = v => ({content:v, styles:{halign:"right"}});
+  const head = ()=>{ doc.setFont("helvetica","bold"); doc.setFontSize(14); doc.text("Purchasing Executive Report", 14, 15);
+    doc.setFont("helvetica","normal"); doc.setFontSize(9);
+    doc.text(`${d8(st.from)} to ${d8(st.to)}  ·  ${st.co?comp(st.co).name:"All companies"}  ·  ${tf||myTypes().join(" + ")}  ·  Amounts in PHP`, 14, 21);
+    doc.text(`Generated ${dt(new Date())} by ${S.me.full_name||S.me.email}`, W-14, 21, {align:"right"}); };
+  head();
+  const T2 = {...TBL, styles:{fontSize:7.5, cellPadding:1.3}, headStyles:{fillColor:[200,16,46], fontSize:7.5}, margin:{left:10,right:10, top:26}, didDrawPage:()=>{}};
+  doc.autoTable({...T2, startY:26, head:[["Module","PRs","PR amount","POs (approved)","PO amount","Paid","Unpaid","Awaiting approval"]],
+    body:(d.kpi||[]).filter(k=>!tf||k.type===tf).map(k=>[k.type, k.pr_count, m(k.pr_amount), k.po_count, m(k.po_amount), m(k.paid_amount), m(k.unpaid_amount), `${k.pending_pr_count} PR / ${k.pending_po_count} PO`]),
+    columnStyles:{2:{halign:"right"},4:{halign:"right"},5:{halign:"right"},6:{halign:"right"}}});
+  const sec = t => { let y = doc.lastAutoTable.finalY + 8; if(y > doc.internal.pageSize.getHeight()-30){ doc.addPage(); y = 16; } doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.text(t, 10, y); return y+3; };
+  doc.autoTable({...T2, startY:sec(`Purchase Requisitions (${R.length})`),
+    head:[["PR No.","PR date","Requested by","Type","Company / Dept","Purpose","PR amount","Status","Approved by","PO No(s).","PO amount"]],
+    body:R.map(x=>[x.pr_no, d8(x.pr_date), x.pr_by||"", x.type, x.company+(x.dept?" / "+x.dept:""), (x.purpose||"").slice(0,60), m(x.amount), x.status, x.approved_by||"", x.po_nos||"", x.po_nos?m(x.po_amount):""]),
+    foot:[["","","","","",r("Total"), r(m(sum(R,"amount"))),"","","", r(m(sum(R,"po_amount")))]], footStyles:{fillColor:[240,240,238], textColor:20, fontStyle:"bold"},
+    columnStyles:{5:{cellWidth:45},6:{halign:"right"},10:{halign:"right"}}});
+  doc.autoTable({...T2, startY:sec(`Purchase Orders (${P.length})`),
+    head:[["PO No.","PO date","Prepared by","Approved by","From PR","PR date","PR requested by","Supplier","PO amount","Status","Payment","Paid","Balance","Date paid"]],
+    body:P.map(x=>[x.po_no, d8(x.po_date), x.po_by||"", x.po_approved_by||"", x.pr_no||"Direct PO", x.pr_date?d8(x.pr_date):"", x.pr_by||"", x.supplier, m(x.amount), x.status, payLabel(x), m(x.amount_paid), m(x.balance), x.last_payment_date?d8(x.last_payment_date):""]),
+    foot:[["","","","","","","",r("Total"), r(m(sum(P,"amount"))),"","", r(m(sum(P,"amount_paid"))), r(m(sum(P,"balance"))),""]], footStyles:{fillColor:[240,240,238], textColor:20, fontStyle:"bold"},
+    columnStyles:{8:{halign:"right"},11:{halign:"right"},12:{halign:"right"}}});
+  const n = doc.internal.getNumberOfPages(); for(let i=1;i<=n;i++){ doc.setPage(i); doc.setFontSize(8); doc.setTextColor(120); doc.text(`Page ${i} of ${n}`, W-10, doc.internal.pageSize.getHeight()-6, {align:"right"}); }
+  doc.save(`Executive_Report_${st.from}_to_${st.to}.pdf`);
 }
 
 // =====================================================================
