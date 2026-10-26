@@ -532,6 +532,7 @@ async function viewPR(id){
     pr = chk(await sb.from("pur_requisitions").select(PR_SEL).eq("id",id).single());
     lines = chk(await sb.from("pur_pr_lines").select("*").eq("pr_id",id).order("line_no"));
   }
+  if(!S.ccList){ try{ const {data:cc} = await sb.from("pur_pr_lines").select("cost_center").neq("cost_center","").limit(1000); S.ccList=[...new Set((cc||[]).map(x=>x.cost_center))].sort(); }catch(e){ S.ccList=[]; } }
   const editable = !pr.id || (["draft","rejected"].includes(pr.status) && (pr.requested_by===S.user.id || isPurch()) && canType(pr.purchase_type));
   const M = mc(pr.purchase_type); setNav("pr/"+M); setTitle(pr.purchase_type, "Purchase Requisition");
   const tr = pr.id ? await trailHtml(pr.id) : {html:"", approvals:[]};
@@ -542,7 +543,7 @@ async function viewPR(id){
 
   const deptOpts = co => S.depts.filter(d=>d.company_id===co && d.active).map(d=>`<option value="${d.id}" ${d.id===pr.department_id?"selected":""}>${esc(d.name)}</option>`).join("");
   $("#view").innerHTML = `
-    <span id="dlWrap">${itemDatalist(pr.purchase_type)}</span>
+    <span id="dlWrap">${itemDatalist(pr.purchase_type)}</span><datalist id="dlCC">${(S.ccList||[]).map(c=>`<option value="${esc(c)}"></option>`).join("")}</datalist>
     <div class="doc-head"><div><h3>${pr.id?esc(pr.pr_no):"New Purchase Requisition"} ${ptype(pr.purchase_type)}</h3><div class="muted small">${pr.id?`Requested by ${esc(pname(pr.requested_by))} · ${d8(pr.request_date)}`:""}</div></div>${pr.id?badge(pr.status):""}<div class="sp"></div>
       <div class="row">
         ${approveButtons(myAppr)}
@@ -560,10 +561,14 @@ async function viewPR(id){
       <div class="fld"><label>Date needed</label><input type="date" id="pNeed" value="${esc(pr.date_needed||"")}" ${editable?"":"disabled"}></div>
       <div class="fld"><label>Priority</label><select id="pPri" ${editable?"":"disabled"}>${["Normal","Urgent","Critical"].map(p=>`<option ${p===pr.priority?"selected":""}>${p}</option>`).join("")}</select></div>
     </div>
-    <div class="fld" style="margin-top:12px"><label>Purpose / justification</label><textarea id="pPurpose" ${editable?"":"disabled"}>${esc(pr.purpose||"")}</textarea></div></div>
+    <div class="grid" style="margin-top:12px">
+      <div class="fld"><label>Delivery address</label><textarea id="pDeliv" placeholder="Where the items should be delivered" ${editable?"":"disabled"}>${esc(pr.delivery_address ?? (pr.id?"":comp(pr.company_id).address||""))}</textarea></div>
+      <div class="fld"><label>Purpose</label><textarea id="pPurpose" ${editable?"":"disabled"}>${esc(pr.purpose||"")}</textarea></div>
+      <div class="fld"><label>Other remarks</label><textarea id="pOther" ${editable?"":"disabled"}>${esc(pr.other_remarks||"")}</textarea></div>
+    </div></div>
     <div class="card"><div class="toolbar"><h3 style="margin:0">Items</h3><div class="sp"></div>${editable?`<button class="btn sm" id="bAddLine">＋ Add line</button><button class="btn sm" id="bReqItem">Item not in ${esc(pr.purchase_type)} Item Master? Request new item</button>`:""}</div>
-      <div class="tbl-wrap"><table class="t" id="prLines"><thead><tr><th>#</th><th style="min-width:260px">Item (from ${esc(pr.purchase_type)} Item Master)</th><th>UOM</th><th class="num">Qty</th><th class="num">Est. unit cost</th><th class="num">Amount</th><th>Remarks</th>${editable?"<th></th>":""}</tr></thead><tbody></tbody>
-      <tfoot><tr><td colspan="5" class="right">Estimated total</td><td class="num" id="prTot"></td><td colspan="${editable?2:1}"></td></tr></tfoot></table></div></div>
+      <div class="tbl-wrap"><table class="t" id="prLines"><thead><tr><th>#</th><th style="min-width:260px">Item (from ${esc(pr.purchase_type)} Item Master)</th><th>UOM</th><th class="num">Qty</th><th class="num">Est. unit cost</th><th class="num">Amount</th><th>Cost center</th><th>Remarks</th>${editable?"<th></th>":""}</tr></thead><tbody></tbody>
+      <tfoot><tr><td colspan="5" class="right">Estimated total</td><td class="num" id="prTot"></td><td colspan="${editable?3:2}"></td></tr></tfoot></table></div></div>
     ${(cvs||[]).length||(pos||[]).length?`<div class="card"><h3>Linked documents</h3><ul class="trail">
       ${(cvs||[]).map(c=>`<li><a href="#cv-edit/${c.id}">${esc(c.cv_no)}</a> Canvass ${badge(c.status)}</li>`).join("")}
       ${(pos||[]).map(p=>`<li><a href="#po-edit/${p.id}">${esc(p.po_no)}</a> ${esc(p.supplier?.name)} · ₱${money(p.total)} ${badge(p.status)}</li>`).join("")}</ul></div>`:""}
@@ -579,10 +584,11 @@ async function viewPR(id){
         <td><input class="inp li-qty right" value="${l.qty??""}" style="width:90px" inputmode="decimal"></td>
         <td><input class="inp li-cost right" value="${l.est_unit_cost??""}" style="width:110px" inputmode="decimal"></td>
         <td class="num li-amt">${money(num(l.qty)*num(l.est_unit_cost))}</td>
+        <td><input class="inp li-cc" list="dlCC" value="${esc(l.cost_center||"")}" style="width:130px"></td>
         <td><input class="inp li-rem" value="${esc(l.remarks||"")}"></td>
         <td><button class="btn sm warn li-del">✕</button></td></tr>`
-      : `<tr><td>${i+1}</td><td>${esc(it?.code||"")} ${esc(l.description)}</td><td>${esc(l.uom)}</td><td class="num">${qtyf(l.qty)}</td><td class="num">${money(l.est_unit_cost)}</td><td class="num">${money(l.amount)}</td><td>${esc(l.remarks||"")}</td></tr>`;
-    }).join("") || `<tr><td colspan="8" class="empty">No items yet.</td></tr>`;
+      : `<tr><td>${i+1}</td><td>${esc(it?.code||"")} ${esc(l.description)}</td><td>${esc(l.uom)}</td><td class="num">${qtyf(l.qty)}</td><td class="num">${money(l.est_unit_cost)}</td><td class="num">${money(l.amount)}</td><td>${esc(l.cost_center||"")}</td><td>${esc(l.remarks||"")}</td></tr>`;
+    }).join("") || `<tr><td colspan="9" class="empty">No items yet.</td></tr>`;
     $("#prTot").textContent = money(L.reduce((s,l)=>s+num(l.qty)*num(l.est_unit_cost),0));
   };
   draw();
@@ -601,24 +607,25 @@ async function viewPR(id){
       if(e.target.classList.contains("li-qty")) l.qty=e.target.value;
       if(e.target.classList.contains("li-cost")) l.est_unit_cost=e.target.value;
       if(e.target.classList.contains("li-rem")) l.remarks=e.target.value;
+      if(e.target.classList.contains("li-cc")) l.cost_center=e.target.value;
       $(".li-amt",tr).textContent = money(num(l.qty)*num(l.est_unit_cost));
       $("#prTot").textContent = money(L.reduce((s,l)=>s+num(l.qty)*num(l.est_unit_cost),0));
     });
     tbody.addEventListener("click", e=>{ if(e.target.classList.contains("li-del")){ L.splice(+e.target.closest("tr").dataset.i,1); draw(); }});
-    $("#bAddLine").onclick = ()=>{ L.push({item_id:null,description:"",uom:"",qty:"",est_unit_cost:"",remarks:""}); draw(); $$(".li-item").pop()?.focus(); };
+    $("#bAddLine").onclick = ()=>{ L.push({item_id:null,description:"",uom:"",qty:"",est_unit_cost:"",cost_center:L.length?L[L.length-1].cost_center||"":"",remarks:""}); draw(); $$(".li-item").pop()?.focus(); };
     $("#bReqItem").onclick = ()=>masterRequestForm("item","create",null,pr.purchase_type);
-    $("#pCo").onchange = ()=>{ pr.company_id=$("#pCo").value; $("#pDept").innerHTML=`<option value="">—</option>`+deptOpts(pr.company_id); };
+    $("#pCo").onchange = ()=>{ const old=comp(pr.company_id).address||""; if(!$("#pDeliv").value.trim() || $("#pDeliv").value.trim()===old) $("#pDeliv").value = comp($("#pCo").value).address||""; pr.company_id=$("#pCo").value; $("#pDept").innerHTML=`<option value="">—</option>`+deptOpts(pr.company_id); };
     const save = async ()=>{
       const t=pr.purchase_type;
       const bad = L.find(l=>!l.item_id); if(bad) throw new Error("Every line must use an item from the Item Master.");
       const badT = L.find(l=>!itemOk(S.items.find(i=>i.id===l.item_id)||{},t)); if(badT) throw new Error(`"${badT.description}" is not in the ${t} Item Master.`);
       if(L.some(l=>num(l.qty)<=0)) throw new Error("Quantity must be more than zero.");
-      const head = {company_id:$("#pCo").value, department_id:$("#pDept").value||null, date_needed:$("#pNeed").value||null, priority:$("#pPri").value, purpose:$("#pPurpose").value.trim()};
+      const head = {company_id:$("#pCo").value, department_id:$("#pDept").value||null, date_needed:$("#pNeed").value||null, priority:$("#pPri").value, purpose:$("#pPurpose").value.trim(), delivery_address:$("#pDeliv").value.trim(), other_remarks:$("#pOther").value.trim()};
       let pid = pr.id;
       if(!pid){ pid = chk(await sb.from("pur_requisitions").insert({...head, purchase_type:t, requested_by:S.user.id}).select("id").single()).id; }
       else chk(await sb.from("pur_requisitions").update(head).eq("id",pid));
       chk(await sb.from("pur_pr_lines").delete().eq("pr_id",pid));
-      if(L.length) chk(await sb.from("pur_pr_lines").insert(L.map((l,i)=>({pr_id:pid,line_no:i+1,item_id:l.item_id,description:l.description,uom:l.uom||"PC",qty:num(l.qty),est_unit_cost:num(l.est_unit_cost),remarks:l.remarks||""}))));
+      if(L.length) chk(await sb.from("pur_pr_lines").insert(L.map((l,i)=>({pr_id:pid,line_no:i+1,item_id:l.item_id,description:l.description,uom:l.uom||"PC",qty:num(l.qty),est_unit_cost:num(l.est_unit_cost),cost_center:(l.cost_center||"").trim(),remarks:l.remarks||""}))));
       return pid;
     };
     $("#bSave").onclick = async ()=>{ const pid = await run(save,"Saved."); if(pid && !pr.id) go("pr-edit/"+pid); else route(); };
@@ -1434,7 +1441,7 @@ function kv(doc, pairs, y){
 function signBlock(doc, sigs, y){
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
   if(y > H-40){ doc.addPage(); y = 20; }
-  const n = Math.max(sigs.length,1), w = (W-28)/n;
+  const n = Math.max(sigs.length,1), w = (W-28)/Math.max(n,3);
   doc.setFontSize(8.5);
   sigs.forEach((s,i)=>{ const cx = 14 + i*w;
     doc.setFont("helvetica","normal"); doc.text(s[0], cx, y);
@@ -1448,15 +1455,49 @@ function approvedSigs(approvals){
   return approvals.filter(a=>a.round===maxR && a.status==="approved").map(a=>[a.step_name||("Approver "+a.step_no), pname(a.approver_id), "Approved "+d8(a.acted_at)]);
 }
 function printPR(pr, lines, approvals){
-  const {jsPDF} = window.jspdf; const doc = new jsPDF();
-  let y = pdfHeader(doc, comp(pr.company_id), "PURCHASE REQUISITION", pr.pr_no);
-  y = kv(doc, [["Purchase type", (pr.purchase_type||"").toUpperCase()],["",""],["Department", pr.dept?.name||""],["Date", d8(pr.request_date)],["Requested by", pname(pr.requested_by)],["Date needed", d8(pr.date_needed)],["Priority", pr.priority],["Status", pr.status.toUpperCase()]], y);
-  doc.setFont("helvetica","bold"); doc.text("Purpose:", 14, y+2); doc.setFont("helvetica","normal"); const pl = doc.splitTextToSize(pr.purpose||"", 160); doc.text(pl, 30, y+2); y += 4 + pl.length*4;
-  doc.autoTable({...TBL, startY:y, head:[["#","Item code","Description","UOM","Qty","Est. unit cost","Amount","Remarks"]],
-    body: lines.map((l,i)=>[i+1, S.items.find(x=>x.id===l.item_id)?.code||"", l.description, l.uom, qtyf(l.qty), money(l.est_unit_cost), money(l.amount), l.remarks||""]),
-    foot:[["","","","","","TOTAL", money(pr.total), ""]], footStyles:{fillColor:[245,245,245], textColor:20, fontStyle:"bold"},
-    columnStyles:{4:{halign:"right"},5:{halign:"right"},6:{halign:"right"}}});
-  signBlock(doc, [["Requested by", pname(pr.requested_by), d8(pr.submitted_at||pr.request_date)], ...approvedSigs(approvals)].slice(0,4), doc.lastAutoTable.finalY + 16);
+  const {jsPDF} = window.jspdf; const doc = new jsPDF(); const co = comp(pr.company_id);
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 16;
+  const mdY = v => { if(!v) return ""; const d=new Date(v+(String(v).length===10?"T00:00:00":"")); return String(d.getMonth()+1).padStart(2,"0")+"/"+String(d.getDate()).padStart(2,"0")+"/"+d.getFullYear(); };
+  // logo (left)
+  if(co.logo){ try{ const fmt=co.logo.includes("image/jpeg")?"JPEG":"PNG"; const ip=doc.getImageProperties(co.logo); const maxW=38,maxH=28; let w=maxW,h=ip.height*maxW/ip.width; if(h>maxH){h=maxH;w=ip.width*maxH/ip.height;} doc.addImage(co.logo,fmt,M,12,w,h); }catch(e){} }
+  // company block (centered between logo and the No. column)
+  const CX = 101, CW = 86;
+  doc.setFont("helvetica","bold"); let fs = 15; doc.setFontSize(fs);
+  while(fs > 10 && doc.getTextWidth(co.name||"") > CW){ fs -= 0.5; doc.setFontSize(fs); }
+  doc.text(co.name||"", CX, 19, {align:"center"});
+  doc.setFont("helvetica","italic"); doc.setFontSize(8.5);
+  const addr = doc.splitTextToSize(co.address||"", 120); doc.text(addr, CX, 27, {align:"center"});
+  let hy = 27 + addr.length*4;
+  if(co.tin){ doc.text("VAT Reg. TIN "+co.tin, CX, hy+1, {align:"center"}); hy += 5; }
+  // No.: (top right)
+  doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.text("No.:", W-M-48, 17);
+  doc.setFontSize(10.5); doc.text(pr.pr_no||"", W-M, 22.5, {align:"right"});
+  doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(110); doc.text((pr.purchase_type||"")+" Purchase", W-M, 27.5, {align:"right"}); doc.setTextColor(0);
+  // title
+  let y = Math.max(hy, 40) + 6;
+  doc.setFont("helvetica","bold"); doc.setFontSize(15); doc.text("PURCHASE REQUISITION", W/2, y, {align:"center"});
+  // header fields
+  y += 12; const RX = W-72;
+  const field = (label, value, x, yy) => { doc.setFont("helvetica","normal"); doc.setFontSize(9.5); doc.text(label, x, yy); doc.text(String(value||""), x+4, yy+5); };
+  field("Requisitioner:", (pname(pr.requested_by)||"").toUpperCase(), M, y); field("Date of Request:", mdY(pr.request_date), RX, y);
+  y += 13; field("Department:", pr.dept?.name||"", M, y); field("Date Needed:", mdY(pr.date_needed), RX, y);
+  y += 13; doc.text("Delivery Address:", M, y);
+  const da = doc.splitTextToSize(pr.delivery_address||"", W-2*M-8); doc.text(da, M+4, y+5); y += 5 + Math.max(1,da.length)*4.5 + 6;
+  // particulars
+  doc.setFont("helvetica","bold"); doc.setFontSize(10); doc.text("Particulars", M, y); y += 2;
+  doc.autoTable({startY:y, theme:"plain", margin:{left:M+2,right:M},
+    head:[["Item Code","Description","Quantity","UOM","Cost Center"]],
+    body: lines.map(l=>[S.items.find(x=>x.id===l.item_id)?.code||"", l.description + (l.remarks?`\n(${l.remarks})`:""), Number(l.qty||0).toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:3}), l.uom, l.cost_center||""]),
+    headStyles:{fontStyle:"bold", fontSize:10, textColor:20, halign:"center"},
+    styles:{fontSize:9.5, cellPadding:{top:2,bottom:2,left:2,right:2}, textColor:20},
+    columnStyles:{0:{cellWidth:30,halign:"left"},1:{cellWidth:"auto"},2:{cellWidth:28,halign:"right"},3:{cellWidth:18,halign:"center"},4:{cellWidth:34,halign:"center"}},
+    didParseCell:d=>{ if(d.section==="head" && d.column.index===0) d.cell.styles.halign="left"; }});
+  y = doc.lastAutoTable.finalY + 10;
+  const block = (label, text) => { if(y > H-60){ doc.addPage(); y = 20; } doc.setFont("helvetica","normal"); doc.setFontSize(9.5); doc.text(label, M+2, y);
+    const t = doc.splitTextToSize(text||"", W-2*M-10); doc.text(t, M+6, y+5); y += 5 + Math.max(1,t.length)*4.5 + 8; };
+  block("Purpose:", pr.purpose); block("Other Remarks:", pr.other_remarks);
+  signBlock(doc, [["Requested by:", (pname(pr.requested_by)||"").toUpperCase(), mdY(pr.submitted_at?String(pr.submitted_at).slice(0,10):pr.request_date)], ...approvedSigs(approvals).map(a=>[a[0]+":", String(a[1]).toUpperCase(), a[2]])].slice(0,4), Math.max(y+4, H-48));
+  doc.setFontSize(7.5); doc.setTextColor(130); doc.text(`Status: ${String(pr.status||"").toUpperCase()} · Printed ${new Date().toLocaleString("en-PH")}`, M, H-8); doc.setTextColor(0);
   doc.save(pr.pr_no + ".pdf");
 }
 function printPO(po, lines, approvals){
