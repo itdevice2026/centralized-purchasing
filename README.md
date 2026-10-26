@@ -38,8 +38,9 @@ Item Master and Supplier Master are controlled by the **Module Admin**. Other us
 
 ## Item and supplier codes
 Items follow the company item list: **Item Code · Item Group · Item Description · Brand · UOM · Status**.
-- **Trade** Item Codes and Supplier Codes are **input by Accounting** (manual, no automatic numbering). A new Trade item/supplier request waits in *Master Data Requests* until Accounting enters the code; only then can the Module Admin approve it. Accounting can also correct a Trade code with the **Code** button on the master list.
-- **Non-Trade** codes stay automatic (ITM-N- / SUP-N-) unless the Module Admin types one.
+- **Trade Item Codes are input by Accounting** (manual). A new Trade item request waits in *Master Data Requests* until Accounting enters the Item Code; only then can the Module Admin approve it. Accounting can also correct a Trade Item Code with the **Code** button on the Item Master.
+- **Supplier Codes are system generated** (SUP-T- / SUP-N-) when the Module Admin approves the supplier request. New suppliers and changes still go through request and approval.
+- **Non-Trade Item Codes** are system generated (ITM-N-) unless the Module Admin types one.
 
 Loaded 26 Oct 2026 from *Item_Data_-_Updated_1.xlsx* (sheet Item Master Data, TRADE/RETAIL/FG table): 1,464 Trade items with their codes, groups, brands and status (migration 025). Blank UOMs (meat and chicken lines) were set to KG. The Non-Trade packaging items were aligned to Item Group "Packaging Supplies", Brand GEN.
 

@@ -228,8 +228,8 @@ const isAdmin = () => S.me?.role === "admin";
 const isPurch = () => ["admin","purchasing"].includes(S.me?.role);
 const isExec = () => ["admin","executive"].includes(S.me?.role);
 const isAcct = () => S.me?.role === "accounting";
-// Trade item & supplier codes are input by Accounting (Module Admin may also set them); Non-Trade codes are automatic
-const canCode = t => isAdmin() || (isAcct() && t === "Trade");
+// Trade ITEM codes are input by Accounting (Module Admin may also set them); supplier codes and Non-Trade item codes are system generated
+const canCode = (t, kind="item") => kind === "item" && (isAdmin() || (isAcct() && t === "Trade"));
 const itemLabel = i => i.description + (i.brand && !/^(gen|general)$/i.test(i.brand) ? ` (${i.brand})` : "");
 const isPresident = () => S.me?.role === "executive";
 const canPay = () => ["admin","purchasing","accounting"].includes(S.me?.role);
@@ -372,7 +372,7 @@ async function navCounts(){
   const [ap, mr] = await Promise.all([
     sb.from("pur_approvals").select("id",{count:"exact",head:true}).eq("approver_id",me).eq("status","pending"),
     isAdmin() ? sb.from("pur_master_requests").select("id",{count:"exact",head:true}).eq("status","pending")
-      : isAcct() ? sb.from("pur_master_requests").select("id",{count:"exact",head:true}).eq("status","pending").eq("action","create").eq("payload->>purchase_type","Trade").is("payload->>code",null)
+      : isAcct() ? sb.from("pur_master_requests").select("id",{count:"exact",head:true}).eq("status","pending").eq("kind","item").eq("action","create").eq("payload->>purchase_type","Trade").is("payload->>code",null)
       : Promise.resolve({count:0}),
   ]);
   S.counts = {ap: ap.count||0, mr: mr.count||0};
@@ -1063,7 +1063,7 @@ async function viewMaster(kind, m){
   const pendSet = new Set((pend||[]).map(p=>p.target_id));
   $("#view").innerHTML = `
     <div class="row" style="margin-bottom:12px">${myTypes().map(t=>`<button class="btn ${t===T?"pri":""}" onclick="go('${base}/${mc(t)}')">${t} ${isItem?"Items":"Suppliers"}</button>`).join("")}</div>
-    <div class="note info"><b>${T}</b> ${isItem?"Item":"Supplier"} Master is controlled by the <b>Module Admin</b>.${T==="Trade"?` <b>${isItem?"Item":"Supplier"} Codes are input by Accounting.</b>`:""} ${isAdmin()?"As Module Admin your changes apply immediately; requests from other users wait in <a href='#mreq'>Master Data Requests</a>.":"Your additions and changes are sent to the Module Admin for approval before they can be used."}</div>
+    <div class="note info"><b>${T}</b> ${isItem?"Item":"Supplier"} Master is controlled by the <b>Module Admin</b>.${isItem&&T==="Trade"?" <b>Item Codes are input by Accounting.</b>":!isItem?" Supplier Codes are system generated once the supplier is approved.":""} ${isAdmin()?"As Module Admin your changes apply immediately; requests from other users wait in <a href='#mreq'>Master Data Requests</a>.":"Your additions and changes are sent to the Module Admin for approval before they can be used."}</div>
     <div class="filters"><input class="inp" id="mQ" placeholder="Search…" style="min-width:260px"><select class="inp" id="mSt"><option value="active">Active</option><option value="inactive">Inactive</option><option value="">All</option></select></div>
     <div id="mTbl"></div>`;
   const cols = isItem ? ["code","category","description","brand","uom","last_price"] : ["code","name","tin","contact_person","phone","payment_terms","vat_type"];
@@ -1073,7 +1073,7 @@ async function viewMaster(kind, m){
     const rows = list.filter(r=>(!st||r.status===st) && (!q || cols.concat(isItem?["specs"]:["category"]).some(c=>String(r[c]??"").toLowerCase().includes(q))));
     $("#mTbl").innerHTML = rows.length ? `<div class="tbl-wrap"><table class="t"><thead><tr>${heads.map(h=>`<th>${h}</th>`).join("")}<th>${isItem?"Suppliers / best price":"Items supplied"}</th><th>Status</th><th></th></tr></thead><tbody>
       ${rows.slice(0,1000).map(r=>`<tr>${cols.map(c=>`<td class="${c==="last_price"?"num":""}">${c==="last_price"?money(r[c]):esc(r[c])}</td>`).join("")}<td>${plCell(kind,r)}</td><td>${badge(r.status)} ${pendSet.has(r.id)?'<span class="badge b-pending">change pending</span>':""}</td>
-        <td>${S.me.role!=="viewer"&&!pendSet.has(r.id)?`<div class="row" style="flex-wrap:nowrap">${canCode(T)?`<button class="btn sm" data-code="${r.id}" title="Input / change the ${isItem?"Item":"Supplier"} Code">Code</button>`:""}<button class="btn sm" data-ed="${r.id}">${isAdmin()?"Edit":"Request change"}</button><button class="btn sm ${r.status==="active"?"warn":""}" data-tg="${r.id}">${r.status==="active"?"Deactivate":"Activate"}</button></div>`:""}</td></tr>`).join("")}
+        <td>${S.me.role!=="viewer"&&!pendSet.has(r.id)?`<div class="row" style="flex-wrap:nowrap">${canCode(T,kind)?`<button class="btn sm" data-code="${r.id}" title="Input / change the ${isItem?"Item":"Supplier"} Code">Code</button>`:""}<button class="btn sm" data-ed="${r.id}">${isAdmin()?"Edit":"Request change"}</button><button class="btn sm ${r.status==="active"?"warn":""}" data-tg="${r.id}">${r.status==="active"?"Deactivate":"Activate"}</button></div>`:""}</td></tr>`).join("")}
       </tbody></table></div>${rows.length>1000?`<div class="small muted">Showing first 1000 of ${rows.length}. Refine your search.</div>`:""}` : `<div class="card empty">${list.length?"No records match your search / status filter.":`No ${T} ${isItem?"items":"suppliers"} yet. ${S.me.role==="viewer"?"":`Click <b>＋ ${isAdmin()?"Add":"Request new"}</b> above${isAdmin()?" or <b>Import Excel</b>":""} to add the first one.`}`}</div>`;
     $$("[data-ed]").forEach(b=>b.onclick=()=>masterRequestForm(kind,"update",list.find(r=>r.id===b.dataset.ed),T));
     $$("[data-tg]").forEach(b=>b.onclick=()=>{ const r=list.find(x=>x.id===b.dataset.tg); masterToggle(kind,r); });
@@ -1152,9 +1152,10 @@ function masterRequestForm(kind, action, rec, T){
   const val = k => rec ? (rec[k]??"") : (k==="vat_type"?"VAT":k==="uom"?"PC":"");
   modal({title:`${direct?(action==="create"?"Add":"Edit"):(action==="create"?"Request new":"Request change to")} ${T} ${isItem?"item":"supplier"}`,
     body:`${direct?"":`<div class="note info">This request goes to the Module Admin. The ${isItem?"item":"supplier"} can be used once approved.</div>`}
-      <div class="grid">${f.map(x=>`<div class="fld" ${x.ta?'style="grid-column:1/-1"':""}><label>${esc(x.l)}${x.req||(x.k==="code"&&!rec&&T==="Trade"&&canCode(T))?" *":""}</label>${
-        x.k==="code" && !rec && !canCode(T) ? `<input disabled value="${T==="Trade"?"To be input by Accounting":"Automatic"}">`
-        : x.k==="code" && !rec && T!=="Trade" ? `<input data-k="code" placeholder="Blank = automatic">`
+      <div class="grid">${f.map(x=>`<div class="fld" ${x.ta?'style="grid-column:1/-1"':""}><label>${esc(x.l)}${x.req||(x.k==="code"&&!rec&&isItem&&T==="Trade"&&canCode(T))?" *":""}</label>${
+        x.k==="code" && !rec && !isItem ? `<input disabled value="System generated after approval">`
+        : x.k==="code" && !rec && !canCode(T) ? `<input disabled value="${T==="Trade"?"To be input by Accounting":"System generated"}">`
+        : x.k==="code" && !rec && T!=="Trade" ? `<input data-k="code" placeholder="Blank = system generated">`
         : x.opt?`<select data-k="${x.k}">${x.opt.map(o=>`<option ${o===val(x.k)?"selected":""}>${o}</option>`).join("")}</select>`
         : x.ta?`<textarea data-k="${x.k}">${esc(val(x.k))}</textarea>`
         : `<input data-k="${x.k}" value="${esc(val(x.k))}" ${x.k==="code"&&rec?`disabled title="Use the Code button to change it"`:""} ${x.n?'inputmode="decimal"':""}>`}</div>`).join("")}</div>
@@ -1165,7 +1166,8 @@ function masterRequestForm(kind, action, rec, T){
       if(isItem && p.uom) p.uom=p.uom.toUpperCase();
       if(action==="create") p.purchase_type = T;
       const miss=f.find(x=>x.req&&!p[x.k]); if(miss) return toast(miss.l+" is required.","err");
-      if(action==="create" && T==="Trade" && canCode(T) && !p.code) return toast(`${isItem?"Item":"Supplier"} Code is required for Trade.`,"err");
+      if(action==="create" && isItem && T==="Trade" && canCode(T) && !p.code) return toast("Item Code is required for Trade items.","err");
+      if(!isItem) delete p.code;
       if(direct){
         const tbl = isItem?"pur_items":"pur_suppliers"; if(p.last_price!==undefined) p.last_price=num(p.last_price);
         if(action==="create"){ if(!p.code) delete p.code; await run(async()=>chk(await sb.from(tbl).insert(p)),"Saved."); }
@@ -1201,32 +1203,33 @@ async function viewMasterRequests(){
   let rows = chk(await sb.from("pur_master_requests").select("*").order("requested_at",{ascending:false}).limit(300));
   const rtype = r => r.payload.purchase_type || ((r.kind==="item"?S.items:S.suppliers).find(x=>x.id===(r.target_id||r.result_id))?.purchase_type);
   if(isAcct()) rows = rows.filter(r=>rtype(r)==="Trade" || r.requested_by===S.user.id);
-  const needCode = r => r.status==="pending" && r.action==="create" && rtype(r)==="Trade" && !r.payload.code;
+  const needCode = r => r.status==="pending" && r.kind==="item" && r.action==="create" && rtype(r)==="Trade" && !r.payload.code;
   const pend = rows.filter(r=>r.status==="pending"), done = rows.filter(r=>r.status!=="pending");
   const tgt = r => { const l = r.kind==="item"?S.items:S.suppliers; return l.find(x=>x.id===(r.target_id||r.result_id)); };
   const title = r => { const t=tgt(r); return r.kind==="item" ? (r.payload.description || t?.description || "") : (r.payload.name || t?.name || ""); };
-  const row = r => `<tr class="click" data-r="${r.id}"><td class="bold">${esc(r.req_no)}</td><td>${r.kind==="item"?"Item":"Supplier"} ${ptype(r.payload.purchase_type||tgt(r)?.purchase_type)}</td><td>${esc(r.action)}</td><td>${esc(title(r))}</td><td class="nw">${r.payload.code?`<b>${esc(r.payload.code)}</b>`:needCode(r)?'<span class="badge b-pending" style="text-transform:none">needs code (Accounting)</span>':'<span class="muted small">—</span>'}</td><td>${esc(pname(r.requested_by))}</td><td>${dt(r.requested_at)}</td><td>${badge(r.status)}</td></tr>`;
+  const row = r => `<tr class="click" data-r="${r.id}"><td class="bold">${esc(r.req_no)}</td><td>${r.kind==="item"?"Item":"Supplier"} ${ptype(r.payload.purchase_type||tgt(r)?.purchase_type)}</td><td>${esc(r.action)}</td><td>${esc(title(r))}</td><td class="nw">${r.kind==="supplier"&&r.action==="create"&&r.status==="pending"?'<span class="muted small">system generated</span>':r.payload.code?`<b>${esc(r.payload.code)}</b>`:needCode(r)?'<span class="badge b-pending" style="text-transform:none">needs code (Accounting)</span>':'<span class="muted small">—</span>'}</td><td>${esc(pname(r.requested_by))}</td><td>${dt(r.requested_at)}</td><td>${badge(r.status)}</td></tr>`;
   const tbl = rs => `<div class="tbl-wrap"><table class="t"><thead><tr><th>Req No.</th><th>Type</th><th>Action</th><th>Record</th><th>Code</th><th>Requested by</th><th>Date</th><th>Status</th></tr></thead><tbody>${rs.map(row).join("")}</tbody></table></div>`;
-  $("#view").innerHTML = `<div class="card"><h3>${isAdmin()?"Waiting for Module Admin approval":isAcct()?"Trade requests — Accounting inputs the Item / Supplier Code":"My pending requests"} (${pend.length})</h3>
-    ${isAcct()||isAdmin()?`<div class="note info">New <b>Trade</b> items and suppliers need a code from <b>Accounting</b> before the Module Admin can approve them. ${pend.filter(needCode).length} request(s) waiting for a code.</div>`:""}${pend.length?tbl(pend):`<div class="empty">Nothing pending.</div>`}</div>
+  $("#view").innerHTML = `<div class="card"><h3>${isAdmin()?"Waiting for Module Admin approval":isAcct()?"Trade requests — Accounting inputs the Item Code":"My pending requests"} (${pend.length})</h3>
+    ${isAcct()||isAdmin()?`<div class="note info">New <b>Trade items</b> need an Item Code from <b>Accounting</b> before the Module Admin can approve them. Supplier Codes are system generated on approval. ${pend.filter(needCode).length} request(s) waiting for a code.</div>`:""}${pend.length?tbl(pend):`<div class="empty">Nothing pending.</div>`}</div>
     <div class="card"><h3>History</h3>${done.length?tbl(done):`<div class="muted small">—</div>`}</div>`;
   $$("[data-r]").forEach(tr=>tr.onclick=()=>showMasterRequest(rows.find(r=>r.id===tr.dataset.r)));
 }
 function showMasterRequest(r){
+  const tgt = x => (x.kind==="item"?S.items:S.suppliers).find(y=>y.id===(x.target_id||x.result_id));
   const f = MF[r.kind]; const cur = (r.kind==="item"?S.items:S.suppliers).find(x=>x.id===r.target_id);
   const showCur = r.action==="update" && cur;
   const body = `<div class="small muted" style="margin-bottom:10px">${esc(r.req_no)} · ${esc(r.kind)} · <b>${esc(r.action)}</b> · requested by ${esc(pname(r.requested_by))} on ${dt(r.requested_at)}</div>
     ${r.reason?`<div class="note info"><b>Reason:</b> ${esc(r.reason)}</div>`:""}
     ${["create","update"].includes(r.action)?`<table class="t diff"><thead><tr><th>Field</th>${showCur?"<th>Current</th>":""}<th>${showCur?"Requested":"Value"}</th></tr></thead><tbody>
-      ${f.filter(x=>r.action==="create"||r.payload[x.k]!==undefined).map(x=>`<tr class="${showCur&&r.payload[x.k]!==undefined?"chg":""}"><td>${esc(x.l)}</td>${showCur?`<td>${esc(cur[x.k])}</td>`:""}<td>${esc(r.payload[x.k]??"")}</td></tr>`).join("")}</tbody></table>`
+      ${f.filter(x=>r.action==="create"||r.payload[x.k]!==undefined).map(x=>`<tr class="${showCur&&r.payload[x.k]!==undefined?"chg":""}"><td>${esc(x.l)}</td>${showCur?`<td>${esc(cur[x.k])}</td>`:""}<td>${x.k==="code"&&r.kind==="supplier"&&r.action==="create"?(r.result_id?esc(tgt(r)?.code||""):'<span class="muted">System generated on approval</span>'):esc(r.payload[x.k]??"")}</td></tr>`).join("")}</tbody></table>`
       : `<p>${esc(r.action)} <b>${esc(cur?.description||cur?.name||"")}</b> (${esc(cur?.code||"")})</p>`}
     ${r.status!=="pending"?`<p class="small">Status: ${badge(r.status)} ${r.reviewed_by?`by ${esc(pname(r.reviewed_by))} on ${dt(r.reviewed_at)}`:""} ${r.review_remarks?`— “${esc(r.review_remarks)}”`:""}</p>`:""}`;
   const rt = r.payload.purchase_type || cur?.purchase_type;
-  const codeStep = r.status==="pending" && r.action==="create" && canCode(rt);
-  const waitCode = r.status==="pending" && r.action==="create" && rt==="Trade" && !r.payload.code;
-  const codeBox = codeStep ? `<div class="card" style="margin:12px 0 0"><div class="fld"><label>${r.kind==="item"?"Item":"Supplier"} Code ${rt==="Trade"?"(input by Accounting) *":"(optional — blank = automatic)"}</label>
+  const codeStep = r.status==="pending" && r.action==="create" && canCode(rt, r.kind);
+  const waitCode = r.status==="pending" && r.kind==="item" && r.action==="create" && rt==="Trade" && !r.payload.code;
+  const codeBox = codeStep ? `<div class="card" style="margin:12px 0 0"><div class="fld"><label>Item Code ${rt==="Trade"?"(input by Accounting) *":"(optional — blank = automatic)"}</label>
       <div class="row"><input class="inp" id="mrCode" value="${esc(r.payload.code||"")}" style="max-width:260px;text-transform:uppercase"><button class="btn pri" id="mrCodeOk">Save code</button></div></div></div>`
-    : waitCode ? `<div class="note" style="margin-top:12px">Waiting for <b>Accounting</b> to input the ${r.kind==="item"?"Item":"Supplier"} Code.</div>` : "";
+    : waitCode ? `<div class="note" style="margin-top:12px">Waiting for <b>Accounting</b> to input the Item Code.</div>` : "";
   const canReview = isAdmin() && r.status==="pending"; const canCancel = r.status==="pending" && (r.requested_by===S.user.id||isAdmin());
   modal({title:"Master data request", wide:true, body: body + codeBox,
     foot:`${canCancel?'<button class="btn" id="mrC">Withdraw request</button>':""}<span style="flex:1"></span><button class="btn" data-close>Close</button>${canReview?'<button class="btn warn" id="mrRj">Reject</button><button class="btn ok" id="mrAp">Approve</button>':""}`,
