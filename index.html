@@ -549,7 +549,7 @@ async function viewPR(id){
         ${approveButtons(myAppr)}
         ${editable?`<button class="btn" id="bSave">💾 Save draft</button><button class="btn pri" id="bSubmit">➤ Submit for approval</button>`:""}
         ${pr.id && pr.status==="draft" && editable?`<button class="btn warn" id="bDel">Delete</button>`:""}
-        ${pr.id && isPurch() && ["approved","canvassing"].includes(pr.status)?`<button class="btn pri" id="bCanvass">⚖ Canvass / RFQ</button><button class="btn" id="bDirectPO">📄 Direct PO</button>`:""}
+        ${pr.id && isPurch() && ["approved","canvassing"].includes(pr.status)?`<button class="btn pri" id="bCanvass">⚖ Canvass / RFQ</button><button class="btn" id="bDirectPO">📄 Create PO from this PR</button>`:""}
         ${pr.id && ["pending","rejected","approved","canvassing"].includes(pr.status) && (pr.requested_by===S.user.id||isPurch())?`<button class="btn warn" id="bCancel">Cancel PR</button>`:""}
         ${pr.id?`<button class="btn" id="bPrint">🖨 Print</button>`:""}
       </div></div>
@@ -567,8 +567,8 @@ async function viewPR(id){
       <div class="fld"><label>Other remarks</label><textarea id="pOther" ${editable?"":"disabled"}>${esc(pr.other_remarks||"")}</textarea></div>
     </div></div>
     <div class="card"><div class="toolbar"><h3 style="margin:0">Items</h3><div class="sp"></div>${editable?`<button class="btn sm" id="bAddLine">＋ Add line</button><button class="btn sm" id="bReqItem">Item not in ${esc(pr.purchase_type)} Item Master? Request new item</button>`:""}</div>
-      <div class="tbl-wrap"><table class="t" id="prLines"><thead><tr><th>#</th><th style="min-width:260px">Item (from ${esc(pr.purchase_type)} Item Master)</th><th>UOM</th><th class="num">Qty</th><th class="num">Est. unit cost</th><th class="num">Amount</th><th>Cost center</th><th>Remarks</th>${editable?"<th></th>":""}</tr></thead><tbody></tbody>
-      <tfoot><tr><td colspan="5" class="right">Estimated total</td><td class="num" id="prTot"></td><td colspan="${editable?3:2}"></td></tr></tfoot></table></div></div>
+      <div class="tbl-wrap"><table class="t" id="prLines"><thead><tr><th>#</th><th style="min-width:260px">Item (from ${esc(pr.purchase_type)} Item Master)</th><th>UOM</th><th class="num">Qty</th><th class="num">Est. unit cost</th><th class="num">Amount</th><th>Supplier</th><th>Cost center</th><th>Remarks</th>${editable?"<th></th>":""}</tr></thead><tbody></tbody>
+      <tfoot><tr><td colspan="5" class="right">Estimated total</td><td class="num" id="prTot"></td><td colspan="${editable?4:3}"></td></tr></tfoot></table></div></div>
     ${(cvs||[]).length||(pos||[]).length?`<div class="card"><h3>Linked documents</h3><ul class="trail">
       ${(cvs||[]).map(c=>`<li><a href="#cv-edit/${c.id}">${esc(c.cv_no)}</a> Canvass ${badge(c.status)}</li>`).join("")}
       ${(pos||[]).map(p=>`<li><a href="#po-edit/${p.id}">${esc(p.po_no)}</a> ${esc(p.supplier?.name)} · ₱${money(p.total)} ${badge(p.status)}</li>`).join("")}</ul></div>`:""}
@@ -584,17 +584,19 @@ async function viewPR(id){
         <td><input class="inp li-qty right" value="${l.qty??""}" style="width:90px" inputmode="decimal"></td>
         <td><input class="inp li-cost right" value="${l.est_unit_cost??""}" style="width:110px" inputmode="decimal"></td>
         <td class="num li-amt">${money(num(l.qty)*num(l.est_unit_cost))}</td>
+        <td><select class="inp li-sup" style="width:170px"><option value="">— Purchasing to assign —</option>${supplierOptions(pr.purchase_type, l.supplier_id)}</select></td>
         <td><input class="inp li-cc" list="dlCC" value="${esc(l.cost_center||"")}" style="width:130px"></td>
         <td><input class="inp li-rem" value="${esc(l.remarks||"")}"></td>
         <td><button class="btn sm warn li-del">✕</button></td></tr>`
-      : `<tr><td>${i+1}</td><td>${esc(it?.code||"")} ${esc(l.description)}</td><td>${esc(l.uom)}</td><td class="num">${qtyf(l.qty)}</td><td class="num">${money(l.est_unit_cost)}</td><td class="num">${money(l.amount)}</td><td>${esc(l.cost_center||"")}</td><td>${esc(l.remarks||"")}</td></tr>`;
-    }).join("") || `<tr><td colspan="9" class="empty">No items yet.</td></tr>`;
+      : `<tr><td>${i+1}</td><td>${esc(it?.code||"")} ${esc(l.description)}</td><td>${esc(l.uom)}</td><td class="num">${qtyf(l.qty)}</td><td class="num">${money(l.est_unit_cost)}</td><td class="num">${money(l.amount)}</td><td>${esc(S.suppliers.find(x=>x.id===l.supplier_id)?.name||"—")}</td><td>${esc(l.cost_center||"")}</td><td>${esc(l.remarks||"")}</td></tr>`;
+    }).join("") || `<tr><td colspan="10" class="empty">No items yet.</td></tr>`;
     $("#prTot").textContent = money(L.reduce((s,l)=>s+num(l.qty)*num(l.est_unit_cost),0));
   };
   draw();
   if(editable){
     tbody.addEventListener("change", e=>{
       const tr=e.target.closest("tr"); if(!tr) return; const l=L[+tr.dataset.i];
+      if(e.target.classList.contains("li-sup")){ l.supplier_id=e.target.value||null; return; }
       if(e.target.classList.contains("li-item")){
         const it = itemFromText(e.target.value, pr.purchase_type);
         if(it){ l.item_id=it.id; l.description=it.description; l.uom=it.uom; if(!num(l.est_unit_cost)) l.est_unit_cost=it.last_price||0; }
@@ -612,7 +614,7 @@ async function viewPR(id){
       $("#prTot").textContent = money(L.reduce((s,l)=>s+num(l.qty)*num(l.est_unit_cost),0));
     });
     tbody.addEventListener("click", e=>{ if(e.target.classList.contains("li-del")){ L.splice(+e.target.closest("tr").dataset.i,1); draw(); }});
-    $("#bAddLine").onclick = ()=>{ L.push({item_id:null,description:"",uom:"",qty:"",est_unit_cost:"",cost_center:L.length?L[L.length-1].cost_center||"":"",remarks:""}); draw(); $$(".li-item").pop()?.focus(); };
+    $("#bAddLine").onclick = ()=>{ L.push({item_id:null,description:"",uom:"",qty:"",est_unit_cost:"",cost_center:L.length?L[L.length-1].cost_center||"":"",supplier_id:null,remarks:""}); draw(); $$(".li-item").pop()?.focus(); };
     $("#bReqItem").onclick = ()=>masterRequestForm("item","create",null,pr.purchase_type);
     const headHint = ()=>{ const d=S.depts.find(x=>x.id===$("#pDept").value); const h=d?.head_id&&S.profiles[d.head_id];
       $("#pHead").innerHTML = !d ? "" : h ? (d.head_id===S.user.id&&pr.requested_by===S.user.id ? "You are the Department Head — this step is skipped." : `First approver: <b>${esc(h.full_name||h.email)}</b> (Department Head)`) : '<span style="color:var(--red)">This department has no Department Head yet.</span>'; };
@@ -628,7 +630,7 @@ async function viewPR(id){
       if(!pid){ pid = chk(await sb.from("pur_requisitions").insert({...head, purchase_type:t, requested_by:S.user.id}).select("id").single()).id; }
       else chk(await sb.from("pur_requisitions").update(head).eq("id",pid));
       chk(await sb.from("pur_pr_lines").delete().eq("pr_id",pid));
-      if(L.length) chk(await sb.from("pur_pr_lines").insert(L.map((l,i)=>({pr_id:pid,line_no:i+1,item_id:l.item_id,description:l.description,uom:l.uom||"PC",qty:num(l.qty),est_unit_cost:num(l.est_unit_cost),cost_center:(l.cost_center||"").trim(),remarks:l.remarks||""}))));
+      if(L.length) chk(await sb.from("pur_pr_lines").insert(L.map((l,i)=>({pr_id:pid,line_no:i+1,item_id:l.item_id,description:l.description,uom:l.uom||"PC",qty:num(l.qty),est_unit_cost:num(l.est_unit_cost),cost_center:(l.cost_center||"").trim(),supplier_id:l.supplier_id||null,remarks:l.remarks||""}))));
       return pid;
     };
     $("#bSave").onclick = async ()=>{ const pid = await run(save,"Saved."); if(pid && !pr.id) go("pr-edit/"+pid); else route(); };
@@ -650,11 +652,57 @@ async function viewPR(id){
 }
 
 function supplierOptions(t, sel){ return S.suppliers.filter(s=>s.status==="active" && s.purchase_type===t).map(s=>`<option value="${s.id}" ${s.id===sel?"selected":""}>${esc(s.name)} (${esc(s.code)})</option>`).join(""); }
-function directPO(pr){
-  modal({title:"Direct PO (no canvass)", body:`<div class="note info">Creates a draft PO for all lines of ${esc(pr.pr_no)} using the estimated costs. You can adjust prices before submitting.</div>
-    <div class="fld"><label>${esc(pr.purchase_type)} supplier (approved only)</label><select id="dpS"><option value="">— select —</option>${supplierOptions(pr.purchase_type)}</select></div>`,
-    foot:`<button class="btn" data-close>Cancel</button><button class="btn pri" id="dpOk">Create PO</button>`,
-    onOpen:(el,close)=>{ $("#dpOk",el).onclick = async ()=>{ const s=$("#dpS",el).value; if(!s) return toast("Select a supplier.","err"); const po = await run(()=>rpc("pur_po_from_pr",{p_pr:pr.id,p_supplier:s}),"Draft PO created."); close(); if(po) go("po-edit/"+po); }; }});
+function directPO(pr){ poFromPR(pr.purchase_type, pr.id); }
+// "Call" an approved PR into Purchase Orders — items can go to different suppliers (one PO per supplier)
+async function poFromPR(T, preId){
+  const {data:prs} = await sb.from("pur_requisitions").select(PR_SEL).eq("purchase_type",T).in("status",["approved","canvassing"]).order("approved_at",{ascending:false}).limit(300);
+  const list = prs||[];
+  if(preId && !list.some(p=>p.id===preId)) return toast("That PR is not approved / open for ordering.","err");
+  modal({title:`Create ${T} PO(s) from PR`, wide:true, body:`
+    <div class="note info">Call an <b>approved ${esc(T)} PR</b>. Each item can have its <b>own supplier</b> — the system creates <b>one PO per supplier</b> with only that supplier's items. Untick items you want to leave for later (another supplier or a canvass). Items already on a PO are locked.</div>
+    <div class="fld"><label>Approved PR *</label><input id="pfQ" list="pfList" placeholder="Type PR no., company or purpose" autocomplete="off" style="max-width:420px">
+      <datalist id="pfList">${list.map(p=>`<option value="${esc(p.pr_no)}">${esc(p.company?.code||"")} · ${esc((p.purpose||"").slice(0,50))} · ₱${money(p.total)}</option>`).join("")}</datalist>
+      <span class="small muted">${list.length} approved PR(s) open for ordering</span></div>
+    <div id="pfInfo" style="margin-top:12px"></div>`,
+    foot:`<button class="btn" data-close>Cancel</button><button class="btn pri" id="pfOk" disabled>Create PO(s) per supplier</button>`,
+    onOpen:(el,close)=>{ let cur=null, ls=[], used={};
+      const preview = ()=>{ const groups={}; let missing=0;
+        $$(".pfL:checked:not(:disabled)",el).forEach(c=>{ const sup=$(`.pfS[data-l="${c.value}"]`,el).value; if(!sup){missing++;return;} groups[sup]=(groups[sup]||0)+1; });
+        const names=Object.entries(groups).map(([k,n])=>`<b>${esc(S.suppliers.find(x=>x.id===k)?.name||"?")}</b> (${n} item${n>1?"s":""})`);
+        $("#pfSum",el).innerHTML = (names.length?`Will create <b>${names.length} PO${names.length>1?"s":""}</b>: ${names.join(" · ")}`:"Tick items and choose their suppliers.") + (missing?` <span style="color:var(--red)">· ${missing} ticked item(s) have no supplier</span>`:"");
+        $("#pfOk",el).disabled = !names.length || missing>0; };
+      const load = async ()=>{ const v=$("#pfQ",el).value.trim().toUpperCase(); if(cur && cur.pr_no.toUpperCase()===v) return; cur = list.find(p=>p.pr_no.toUpperCase()===v) || null;
+        if(!cur){ $("#pfInfo",el).innerHTML = v?'<div class="muted small">Pick a PR from the list.</div>':""; $("#pfOk",el).disabled=true; return; }
+        ls = chk(await sb.from("pur_pr_lines").select("*").eq("pr_id",cur.id).order("line_no"));
+        const ids = ls.map(l=>l.id);
+        const {data:on} = ids.length ? await sb.from("pur_po_lines").select("pr_line_id, po:pur_purchase_orders(po_no,status)").in("pr_line_id",ids) : {data:[]};
+        used = {}; (on||[]).forEach(x=>{ if(x.po && x.po.status!=="cancelled") used[x.pr_line_id]=x.po.po_no; });
+        const open = ls.filter(l=>!used[l.id]);
+        $("#pfInfo",el).innerHTML = `<div class="card" style="margin:0"><div class="toolbar"><b>${esc(cur.pr_no)}</b> ${badge(cur.status)} <span class="muted small">${esc(cur.company?.code||"")} · ${esc(cur.dept?.name||"")} · requested by ${esc(pname(cur.requested_by))} · needed ${d8(cur.date_needed)}</span></div>
+          ${open.length?`<div class="row" style="margin-bottom:8px"><span class="small">Set supplier for ticked items:</span><select class="inp" id="pfBulk" style="width:240px"><option value="">— choose —</option>${supplierOptions(T)}</select><button class="btn sm" id="pfApply">Apply</button></div>`:""}
+          <div class="tbl-wrap"><table class="t"><thead><tr><th><input type="checkbox" id="pfAllC" style="width:16px;height:16px" ${open.length?"checked":"disabled"}></th><th>Item</th><th class="num">Qty</th><th>UOM</th><th class="num">Est. cost</th><th>Supplier</th><th>Status</th></tr></thead><tbody>
+          ${ls.map(l=>`<tr style="${used[l.id]?"opacity:.55":""}"><td><input type="checkbox" class="pfL" value="${l.id}" ${used[l.id]?"disabled":"checked"} style="width:16px;height:16px"></td>
+            <td>${esc(S.items.find(i=>i.id===l.item_id)?.code||"")} ${esc(l.description)}${l.cost_center?`<div class="small muted">${esc(l.cost_center)}</div>`:""}</td><td class="num">${qtyf(l.qty)}</td><td>${esc(l.uom)}</td><td class="num">${money(l.est_unit_cost)}</td>
+            <td>${used[l.id]?esc(S.suppliers.find(x=>x.id===l.supplier_id)?.name||"—"):`<select class="inp pfS" data-l="${l.id}" style="width:200px"><option value="">— select —</option>${supplierOptions(T, l.supplier_id)}</select>`}</td>
+            <td>${used[l.id]?`<span class="small">on ${esc(used[l.id])}</span>`:'<span class="badge b-pending" style="text-transform:none">open</span>'}</td></tr>`).join("")}</tbody></table></div>
+          <div class="small" id="pfSum" style="margin-top:10px"></div></div>`;
+        $$(".pfL,.pfS",el).forEach(x=>x.onchange=preview);
+        if($("#pfAllC",el)) $("#pfAllC",el).onchange=e=>{ $$(".pfL:not(:disabled)",el).forEach(c=>c.checked=e.target.checked); preview(); };
+        if($("#pfApply",el)) $("#pfApply",el).onclick=()=>{ const v=$("#pfBulk",el).value; if(!v) return toast("Choose a supplier.","err"); $$(".pfL:checked:not(:disabled)",el).forEach(c=>{ $(`.pfS[data-l="${c.value}"]`,el).value=v; }); preview(); };
+        preview();
+      };
+      $("#pfQ",el).onchange = load; $("#pfQ",el).oninput = ()=>{ if(list.some(p=>p.pr_no.toUpperCase()===$("#pfQ",el).value.trim().toUpperCase())) load(); };
+      if(preId){ $("#pfQ",el).value = list.find(p=>p.id===preId).pr_no; load(); }
+      $("#pfOk",el).onclick = async ()=>{ if(!cur) return;
+        const sel = $$(".pfL:checked:not(:disabled)",el).map(c=>c.value); if(!sel.length) return toast("Tick at least one item.","err");
+        const map = {}; $$(".pfS",el).forEach(x=>{ const l=ls.find(y=>y.id===x.dataset.l); if((l?.supplier_id||"")!==x.value) map[x.dataset.l]=x.value||null; });
+        const res = await run(async()=>{ if(Object.keys(map).length) await rpc("pur_set_line_suppliers",{p_pr:cur.id,p_map:map}); return rpc("pur_po_by_supplier",{p_pr:cur.id,p_line_ids:sel}); });
+        if(!res) return; close();
+        if(res.length===1){ toast(`Draft ${res[0].po_no} created for ${res[0].supplier}.`,"ok"); return go("po-edit/"+res[0].po_id); }
+        modal({title:`${res.length} draft POs created`, body:`<p style="margin-top:0">From <b>${esc(cur.pr_no)}</b>, one PO per supplier:</p><ul class="trail">${res.map(x=>`<li><a href="#po-edit/${x.po_id}" data-close>${esc(x.po_no)}</a> ${esc(x.supplier)} <span class="muted small">${x.lines} item(s)</span></li>`).join("")}</ul><p class="small muted">Review prices on each PO, then submit them for approval.</p>`, foot:`<button class="btn pri" data-close>Done</button>`});
+        route();
+      };
+    }});
 }
 
 // =====================================================================
@@ -784,7 +832,7 @@ async function viewCV(id){
 const PO_SEL = "*, company:pur_companies(*), supplier:pur_suppliers(*), pr:pur_requisitions(pr_no,purpose,requested_by)";
 async function viewPOList(m){
   const T = modOf(m); setTitle(T, "Purchase Orders");
-  $("#topActions").innerHTML = isPurch() ? `<button class="btn" onclick="newManualPO('${T}')">＋ ${T} PO without PR</button>` : "";
+  $("#topActions").innerHTML = isPurch() ? `<button class="btn pri" onclick="poFromPR('${T}')">＋ PO from PR</button> <button class="btn" onclick="newManualPO('${T}')">＋ PO without PR</button>` : "";
   $("#view").innerHTML = `
     <div class="filters">
       <select class="inp" id="fCo"><option value="">All companies</option>${myCompanies().map(c=>`<option value="${c.id}">${esc(c.code)}</option>`).join("")}</select>
