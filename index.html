@@ -527,7 +527,7 @@ async function viewPRList(m){
 }
 
 function itemOk(i, t){ return i.status==="active" && (!t || i.purchase_type===t); }
-function itemDatalist(t){ return `<datalist id="dlItems">${S.items.filter(i=>itemOk(i,t)).map(i=>`<option value="${esc(i.code)} — ${esc(i.description)}"></option>`).join("")}</datalist>`; }
+function itemDatalist(t){ return `<datalist id="dlItems">${S.items.filter(i=>itemOk(i,t)).map(i=>`<option value="${esc(i.code)} — ${esc(i.description)}"${i.specs?` label="${esc(i.specs)}"`:""}></option>`).join("")}</datalist>`; }
 function itemFromText(v, t){ const code = String(v||"").split(" — ")[0].trim().toUpperCase(); return S.items.find(i=>i.code===code && itemOk(i,t)); }
 
 async function viewPR(id){
@@ -1064,7 +1064,7 @@ async function viewMaster(kind, m){
   const heads = isItem ? ["Code","Description","UOM","Category","Ref. price"] : ["Code","Name","TIN","Contact","Phone","Terms","VAT"];
   const draw = ()=>{
     const q=$("#mQ").value.trim().toLowerCase(), st=$("#mSt").value;
-    const rows = list.filter(r=>(!st||r.status===st) && (!q || cols.some(c=>String(r[c]??"").toLowerCase().includes(q))));
+    const rows = list.filter(r=>(!st||r.status===st) && (!q || cols.concat(isItem?["specs"]:["category"]).some(c=>String(r[c]??"").toLowerCase().includes(q))));
     $("#mTbl").innerHTML = rows.length ? `<div class="tbl-wrap"><table class="t"><thead><tr>${heads.map(h=>`<th>${h}</th>`).join("")}<th>${isItem?"Suppliers / best price":"Items supplied"}</th><th>Status</th><th></th></tr></thead><tbody>
       ${rows.slice(0,1000).map(r=>`<tr>${cols.map(c=>`<td class="${c==="last_price"?"num":""}">${c==="last_price"?money(r[c]):esc(r[c])}</td>`).join("")}<td>${plCell(kind,r)}</td><td>${badge(r.status)} ${pendSet.has(r.id)?'<span class="badge b-pending">change pending</span>':""}</td>
         <td>${S.me.role!=="viewer"&&!pendSet.has(r.id)?`<div class="row" style="flex-wrap:nowrap"><button class="btn sm" data-ed="${r.id}">${isAdmin()?"Edit":"Request change"}</button><button class="btn sm ${r.status==="active"?"warn":""}" data-tg="${r.id}">${r.status==="active"?"Deactivate":"Activate"}</button></div>`:""}</td></tr>`).join("")}

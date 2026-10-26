@@ -38,6 +38,8 @@ Each item is linked to the suppliers that sell it, with a price (`pur_supplier_i
 
 Loaded 26 Oct 2026 from *Packaging_Supplier_with_Items.xlsx* (Non-Trade): 14 suppliers, 29 items, 38 prices (migration 021). UOM was defaulted to PC and VAT type to VAT. Review these.
 
+Loaded 26 Oct 2026 from *DRY_SUPPLIER_WITH_ITEMS.xlsx* (Non-Trade, category DRYFOOD): 24 suppliers, 57 items, 58 prices (migration 022). Old item codes (MS-…) are kept in the item's Specs field and are searchable.
+
 ## Roles
 | Role | Can do |
 |---|---|
